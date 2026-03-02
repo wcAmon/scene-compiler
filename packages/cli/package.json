@@ -1,0 +1,16 @@
+{
+  "name": "@scene-compiler/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "scene": "./src/index.ts"
+  },
+  "dependencies": {
+    "@scene-compiler/validator": "workspace:*",
+    "commander": "^13.0.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.21.0"
+  }
+}
