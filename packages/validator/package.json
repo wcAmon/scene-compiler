@@ -1,0 +1,9 @@
+{
+  "name": "@scene-compiler/validator",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./src/index.ts",
+  "dependencies": {
+    "ts-morph": "^25.0.0"
+  }
+}
