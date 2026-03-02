@@ -19,7 +19,11 @@ program
     "-b, --budget <path>",
     "path to game.budget.json",
   )
-  .action((dir: string, opts: { budget?: string }) => {
+  .option(
+    "-p, --public <dir>",
+    "public assets directory for GLB lookup (default: <dir>/../public)",
+  )
+  .action((dir: string, opts: { budget?: string; public?: string }) => {
     const exitCode = runValidate(dir, opts);
     process.exit(exitCode);
   });
@@ -40,7 +44,11 @@ program
     "-b, --budget <path>",
     "path to game.budget.json",
   )
-  .action((dir: string, opts: { budget?: string }) => {
+  .option(
+    "-p, --public <dir>",
+    "public assets directory for GLB lookup (default: <dir>/../public)",
+  )
+  .action((dir: string, opts: { budget?: string; public?: string }) => {
     const exitCode = runBuild(dir, opts);
     process.exit(exitCode);
   });

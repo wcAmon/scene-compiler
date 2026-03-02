@@ -16,7 +16,7 @@ const GREEN = "\x1b[32m";
 const RESET = "\x1b[0m";
 const BOLD = "\x1b[1m";
 
-export function runValidate(dir: string, opts: { budget?: string }): number {
+export function runValidate(dir: string, opts: { budget?: string; public?: string }): number {
   const sourceDir = resolve(dir);
 
   // Load budget config
@@ -43,9 +43,14 @@ export function runValidate(dir: string, opts: { budget?: string }): number {
     return 1;
   }
 
+  // Resolve public directory for GLB asset lookup
+  const publicDir = opts.public
+    ? resolve(opts.public)
+    : resolve(sourceDir, "..", "public");
+
   // Assemble all rules
   const rules = [
-    createGlbExistsRule(sourceDir),
+    createGlbExistsRule(publicDir),
     noRawMeshInLoopRule,
     shadowConfigRule,
     materialFreezeRule,

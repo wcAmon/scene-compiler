@@ -6,7 +6,7 @@ const GREEN = "\x1b[32m";
 const BOLD = "\x1b[1m";
 const RESET = "\x1b[0m";
 
-export function runBuild(dir: string, opts: { budget?: string }): number {
+export function runBuild(dir: string, opts: { budget?: string; public?: string }): number {
   console.log(`${BOLD}Step 1: Validating...${RESET}\n`);
 
   const validateExitCode = runValidate(dir, opts);
