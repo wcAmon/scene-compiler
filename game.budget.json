@@ -1,0 +1,10 @@
+{
+  "maxNPCs": 30,
+  "maxShadowCasters": 10,
+  "maxGLBSizeMB": 5,
+  "maxTotalAssetTypes": 50,
+  "maxRenderDistance": 300,
+  "targetFPS": 30,
+  "maxDrawCalls": 200,
+  "maxActiveMeshes": 500
+}
