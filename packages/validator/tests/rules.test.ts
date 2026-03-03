@@ -5,6 +5,8 @@ import os from "node:os";
 import { Project } from "ts-morph";
 import { createGlbExistsRule } from "../src/rules/glb-exists.js";
 import { noRawMeshInLoopRule } from "../src/rules/no-raw-mesh-in-loop.js";
+import { requireLodRule } from "../src/rules/require-lod.js";
+import { requireOctreeRule } from "../src/rules/require-octree.js";
 import type { BudgetConfig } from "../src/types.js";
 
 const defaultBudget: BudgetConfig = {
@@ -121,5 +123,117 @@ describe("no-raw-mesh-in-loop", () => {
     `);
     const diagnostics = noRawMeshInLoopRule.check(sf, defaultBudget);
     expect(diagnostics).toHaveLength(1);
+  });
+});
+
+const openWorldBudget: BudgetConfig = {
+  maxNPCs: 30,
+  maxShadowCasters: 10,
+  maxGLBSizeMB: 5,
+  maxTotalAssetTypes: 50,
+  maxRenderDistance: 300,
+  targetFPS: 30,
+  maxDrawCalls: 200,
+  maxActiveMeshes: 500,
+  lodRequired: true,
+  octreeRequired: false,
+  warnThreshold: 0.75,
+};
+
+describe("require-lod", () => {
+  it("should error when file has many mesh creations but no addLODLevel (lodRequired=true)", () => {
+    const meshLines = Array.from({ length: 110 }, (_, i) =>
+      `MeshBuilder.CreateBox("box${i}", { size: 1 }, scene);`
+    ).join("\n");
+    const sf = createSourceFile(meshLines);
+    const diagnostics = requireLodRule.check(sf, openWorldBudget);
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics[0].severity).toBe("error");
+    expect(diagnostics[0].message).toContain("LOD");
+  });
+
+  it("should pass when addLODLevel is present", () => {
+    const meshLines = Array.from({ length: 110 }, (_, i) =>
+      `MeshBuilder.CreateBox("box${i}", { size: 1 }, scene);`
+    ).join("\n");
+    const sf = createSourceFile(meshLines + `\nmesh.addLODLevel(150, lowMesh);`);
+    const diagnostics = requireLodRule.check(sf, openWorldBudget);
+    expect(diagnostics).toHaveLength(0);
+  });
+
+  it("should warn (not error) when lodRequired=false", () => {
+    const meshLines = Array.from({ length: 110 }, (_, i) =>
+      `MeshBuilder.CreateBox("box${i}", { size: 1 }, scene);`
+    ).join("\n");
+    const sf = createSourceFile(meshLines);
+    const diagnostics = requireLodRule.check(sf, defaultBudget);
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics[0].severity).toBe("warning");
+  });
+
+  it("should pass when mesh count is below threshold", () => {
+    const sf = createSourceFile(`
+      MeshBuilder.CreateBox("ground", { size: 100 }, scene);
+      MeshBuilder.CreateBox("wall", { size: 5 }, scene);
+    `);
+    const diagnostics = requireLodRule.check(sf, openWorldBudget);
+    expect(diagnostics).toHaveLength(0);
+  });
+});
+
+const octreeBudget: BudgetConfig = {
+  maxNPCs: 30,
+  maxShadowCasters: 10,
+  maxGLBSizeMB: 5,
+  maxTotalAssetTypes: 50,
+  maxRenderDistance: 300,
+  targetFPS: 30,
+  maxDrawCalls: 200,
+  maxActiveMeshes: 500,
+  lodRequired: false,
+  octreeRequired: true,
+  warnThreshold: 0.75,
+};
+
+describe("require-octree", () => {
+  it("should error when file has many mesh creations but no octree (octreeRequired=true)", () => {
+    const meshLines = Array.from({ length: 210 }, (_, i) =>
+      `MeshBuilder.CreateBox("box${i}", { size: 1 }, scene);`
+    ).join("\n");
+    const sf = createSourceFile(meshLines);
+    const diagnostics = requireOctreeRule.check(sf, octreeBudget);
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics[0].severity).toBe("error");
+    expect(diagnostics[0].message).toContain("Octree");
+  });
+
+  it("should pass when createOrUpdateSelectionOctree is present", () => {
+    const meshLines = Array.from({ length: 210 }, (_, i) =>
+      `MeshBuilder.CreateBox("box${i}", { size: 1 }, scene);`
+    ).join("\n");
+    const sf = createSourceFile(
+      meshLines + `\nscene.createOrUpdateSelectionOctree(32, 2);`
+    );
+    const diagnostics = requireOctreeRule.check(sf, octreeBudget);
+    expect(diagnostics).toHaveLength(0);
+  });
+
+  it("should warn (not error) when octreeRequired=false", () => {
+    const meshLines = Array.from({ length: 210 }, (_, i) =>
+      `MeshBuilder.CreateBox("box${i}", { size: 1 }, scene);`
+    ).join("\n");
+    const sf = createSourceFile(meshLines);
+    const diagnostics = requireOctreeRule.check(sf, defaultBudget);
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics[0].severity).toBe("warning");
+  });
+
+  it("should pass when mesh count is below threshold", () => {
+    const sf = createSourceFile(`
+      MeshBuilder.CreateBox("a", {}, scene);
+      MeshBuilder.CreateBox("b", {}, scene);
+    `);
+    const diagnostics = requireOctreeRule.check(sf, octreeBudget);
+    expect(diagnostics).toHaveLength(0);
   });
 });
