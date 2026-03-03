@@ -53,7 +53,7 @@ function parseV2(obj: Record<string, unknown>): BudgetConfig {
 
 function num(obj: Record<string, unknown>, key: string, def: number): number {
   const v = obj[key];
-  return typeof v === "number" ? v : def;
+  return typeof v === "number" && isFinite(v) ? v : def;
 }
 
 function bool(obj: Record<string, unknown>, key: string, def: boolean): boolean {

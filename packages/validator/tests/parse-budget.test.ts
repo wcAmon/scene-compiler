@@ -13,6 +13,10 @@ describe("parseBudget", () => {
     expect(budget.lodRequired).toBe(false);
     expect(budget.octreeRequired).toBe(false);
     expect(budget.warnThreshold).toBe(0.75);
+    expect(budget.maxNPCs).toBe(30);
+    expect(budget.maxDrawCalls).toBe(200);
+    expect(budget.targetFPS).toBe(30);
+    expect(budget.maxRenderDistance).toBe(300);
   });
 
   it("parses v2 structured format", () => {
@@ -41,5 +45,6 @@ describe("parseBudget", () => {
   it("throws on invalid input", () => {
     expect(() => parseBudget(null)).toThrow();
     expect(() => parseBudget("string")).toThrow();
+    expect(() => parseBudget([])).toThrow();
   });
 });
