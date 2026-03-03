@@ -37,7 +37,7 @@ export function runValidate(dir: string, opts: { budget?: string; public?: strin
 
   let budget: BudgetConfig;
   try {
-    const raw = JSON.parse(readFileSync(budgetPath, "utf-8"));
+    const raw: unknown = JSON.parse(readFileSync(budgetPath, "utf-8"));
     budget = parseBudget(raw);
   } catch (e) {
     console.error(
