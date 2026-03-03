@@ -6,6 +6,8 @@ export {
   shadowConfigRule,
   materialFreezeRule,
   budgetLimitsRule,
+  requireLodRule,
+  requireOctreeRule,
 } from "./rules/index.js";
 export type {
   BudgetConfig,

@@ -2,11 +2,14 @@ import { resolve } from "node:path";
 import { readFileSync, existsSync } from "node:fs";
 import {
   validate,
+  parseBudget,
   createGlbExistsRule,
   noRawMeshInLoopRule,
   shadowConfigRule,
   materialFreezeRule,
   budgetLimitsRule,
+  requireLodRule,
+  requireOctreeRule,
   type BudgetConfig,
 } from "@scene-compiler/validator";
 
@@ -34,7 +37,8 @@ export function runValidate(dir: string, opts: { budget?: string; public?: strin
 
   let budget: BudgetConfig;
   try {
-    budget = JSON.parse(readFileSync(budgetPath, "utf-8"));
+    const raw = JSON.parse(readFileSync(budgetPath, "utf-8"));
+    budget = parseBudget(raw);
   } catch (e) {
     console.error(
       `${RED}Error: Failed to parse budget config at ${budgetPath}${RESET}`,
@@ -55,6 +59,8 @@ export function runValidate(dir: string, opts: { budget?: string; public?: strin
     shadowConfigRule,
     materialFreezeRule,
     budgetLimitsRule,
+    requireLodRule,
+    requireOctreeRule,
   ];
 
   console.log(`Validating ${BOLD}${sourceDir}${RESET}...\n`);
