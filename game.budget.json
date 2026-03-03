@@ -1,10 +1,33 @@
 {
-  "maxNPCs": 30,
-  "maxShadowCasters": 10,
-  "maxGLBSizeMB": 5,
-  "maxTotalAssetTypes": 50,
-  "maxRenderDistance": 300,
-  "targetFPS": 30,
-  "maxDrawCalls": 200,
-  "maxActiveMeshes": 500
+  "version": 2,
+  "frame": {
+    "maxDrawCalls": 200,
+    "maxActiveMeshes": 500,
+    "maxShadowCasters": 10,
+    "maxRenderDistance": 300,
+    "targetFPS": 30
+  },
+  "world": {
+    "maxTotalMeshTypes": 50,
+    "chunkSize": 100
+  },
+  "npcs": {
+    "maxTotal": 100,
+    "maxActive": 25,
+    "activationRadius": 80
+  },
+  "openWorld": {
+    "lodRequired": false,
+    "lodDistances": [50, 150, 300],
+    "octreeRequired": false,
+    "streamingChunkSize": 100
+  },
+  "assets": {
+    "maxGLBSizeMB": 5,
+    "maxTextureSizePx": 2048
+  },
+  "thresholds": {
+    "warn": 0.75,
+    "error": 1.0
+  }
 }
