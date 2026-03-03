@@ -94,4 +94,32 @@ describe("no-raw-mesh-in-loop", () => {
     expect(diagnostics).toHaveLength(1);
     expect(diagnostics[0].message).toContain("MeshBuilder");
   });
+
+  it("should NOT error when loop meshes are merged via Mesh.MergeMeshes", () => {
+    const sf = createSourceFile(`
+      function buildLaneMarkings(): void {
+        const dashes: Mesh[] = [];
+        for (let x = 0; x < 500; x += 5) {
+          const dash = MeshBuilder.CreateGround("dash", { width: 2, height: 0.15 }, scene);
+          dashes.push(dash);
+        }
+        Mesh.MergeMeshes(dashes, true, true);
+      }
+    `);
+    const diagnostics = noRawMeshInLoopRule.check(sf, defaultBudget);
+    expect(diagnostics).toHaveLength(0);
+  });
+
+  it("should still error when loop meshes are NOT merged", () => {
+    const sf = createSourceFile(`
+      function buildBuildings(): void {
+        for (let i = 0; i < 100; i++) {
+          const box = MeshBuilder.CreateBox("box" + i, { size: 1 }, scene);
+          box.position.x = i * 2;
+        }
+      }
+    `);
+    const diagnostics = noRawMeshInLoopRule.check(sf, defaultBudget);
+    expect(diagnostics).toHaveLength(1);
+  });
 });
