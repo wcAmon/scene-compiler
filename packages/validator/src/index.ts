@@ -1,4 +1,5 @@
 export { validate } from "./validator.js";
+export { parseBudget } from "./parse-budget.js";
 export {
   createGlbExistsRule,
   noRawMeshInLoopRule,

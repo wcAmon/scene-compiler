@@ -16,6 +16,9 @@ const defaultBudget: BudgetConfig = {
   targetFPS: 30,
   maxDrawCalls: 200,
   maxActiveMeshes: 500,
+  lodRequired: false,
+  octreeRequired: false,
+  warnThreshold: 0.75,
 };
 
 function createSourceFile(code: string) {
