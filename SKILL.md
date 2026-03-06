@@ -7,7 +7,7 @@
 
 ## Golden Rules
 
-1. **NEVER create meshes inside loops.** Use `MeshBuilder` outside the loop, then thin instances (`mesh.thinInstanceAdd()`) or clones inside.
+1. **NEVER create meshes inside loops** — unless the same function uses a batching pattern (MergeMeshes / thinInstanceAdd / thinInstanceSetBuffer). Use `MeshBuilder` outside the loop, then thin instances or clones inside. Creating template meshes for thin instances in a loop is allowed.
 2. **ALWAYS call `.freeze()` on materials** after setting all properties. The rewriter does this automatically, but explicit is better.
 3. **ALWAYS verify GLB paths exist** under `public/`. The validator will error on missing `.glb` references.
 4. **ALWAYS guard `.dispose()` calls** with null checks: `mesh && mesh.dispose()`. The rewriter adds these, but write them yourself.
@@ -19,7 +19,9 @@
 
 ### Rule 1: `no-raw-mesh-in-loop` (ERROR)
 
-**Triggers when:** `new Mesh()` or `new MeshBuilder()` appears inside `for`, `while`, `do`, `for...in`, or `for...of`.
+**Triggers when:** `new Mesh()` or `new MeshBuilder()` appears inside loops (`for`, `while`, `do`, `for...in`, `for...of`) **or** array iterator methods (`.forEach()`, `.map()`, `.flatMap()`, `.reduce()`).
+
+**Exempt when:** The containing function uses a batching pattern: `MergeMeshes`, `thinInstanceAdd`, or `thinInstanceSetBuffer`.
 
 ```typescript
 // BAD — creates 100 draw calls
@@ -28,12 +30,26 @@ for (let i = 0; i < 100; i++) {
   box.position.x = i * 2;
 }
 
+// BAD — .forEach() is also caught
+positions.forEach(pos => {
+  MeshBuilder.CreateBox("box", { size: 1 }, scene);
+});
+
 // GOOD — one mesh, 100 thin instances
 const box = MeshBuilder.CreateBox("box", { size: 1 }, scene);
 const matrix = Matrix.Identity();
 for (let i = 0; i < 100; i++) {
   matrix.setTranslation(new Vector3(i * 2, 0, 0));
   box.thinInstanceAdd(matrix);
+}
+
+// GOOD — loop creates thin instance templates (exempt: thinInstanceAdd in function)
+for (const config of meshConfigs) {
+  const template = MeshBuilder.CreateBox(config.name, config.size, scene);
+  template.isVisible = false;
+  for (const pos of config.positions) {
+    template.thinInstanceAdd(Matrix.Translation(pos.x, pos.y, pos.z));
+  }
 }
 ```
 

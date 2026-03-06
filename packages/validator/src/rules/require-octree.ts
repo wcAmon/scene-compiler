@@ -36,8 +36,13 @@ export const requireOctreeRule: Rule = {
 
     if (meshCount <= threshold) return [];
 
-    const fileText = sourceFile.getFullText();
-    if (fileText.includes("createOrUpdateSelectionOctree")) return [];
+    // Check current file AND all other project files for octree setup.
+    // Octree is typically set up once in a scene manager, not in every file.
+    const allFiles = sourceFile.getProject().getSourceFiles();
+    const hasOctree = allFiles.some((f) =>
+      f.getFullText().includes("createOrUpdateSelectionOctree"),
+    );
+    if (hasOctree) return [];
 
     const severity = budget.octreeRequired ? "error" : "warning";
     const filePath = sourceFile.getFilePath();

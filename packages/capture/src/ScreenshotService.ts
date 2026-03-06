@@ -2,6 +2,9 @@ import type { Engine } from "@babylonjs/core/Engines/engine";
 import type { Camera } from "@babylonjs/core/Cameras/camera";
 import type { Scene } from "@babylonjs/core/scene";
 import { Tools } from "@babylonjs/core/Misc/tools";
+// Side-effect import: registers CreateScreenshot[UsingRenderTarget] on Tools.
+// Without this, Babylon.js v7 tree-shaking removes the implementation.
+import "@babylonjs/core/Misc/screenshotTools";
 
 export interface ScreenshotOptions {
   label: string;
@@ -80,8 +83,11 @@ export class ScreenshotService {
     const width = options.width ?? 1280;
     const height = options.height ?? 720;
 
+    // Use canvas-based CreateScreenshot (not RenderTarget variant) to avoid
+    // Babylon.js 7.54.x regression where RenderTargetTexture calls
+    // scene.addObjectRenderer which doesn't exist.
     const dataURI = await new Promise<string>((resolve) => {
-      Tools.CreateScreenshotUsingRenderTarget(
+      Tools.CreateScreenshot(
         this.engine,
         camera,
         { width, height },

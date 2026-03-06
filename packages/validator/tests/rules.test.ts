@@ -112,6 +112,71 @@ describe("no-raw-mesh-in-loop", () => {
     expect(diagnostics).toHaveLength(0);
   });
 
+  it("should NOT error when loop creates thin instance templates", () => {
+    const sf = createSourceFile(`
+      function buildForest(): void {
+        for (const config of treeConfigs) {
+          const template = MeshBuilder.CreateCylinder(config.name, config.opts, scene);
+          template.isVisible = false;
+          for (const pos of config.positions) {
+            template.thinInstanceAdd(Matrix.Translation(pos.x, pos.y, pos.z));
+          }
+        }
+      }
+    `);
+    const diagnostics = noRawMeshInLoopRule.check(sf, defaultBudget);
+    expect(diagnostics).toHaveLength(0);
+  });
+
+  it("should NOT error when function uses thinInstanceSetBuffer", () => {
+    const sf = createSourceFile(`
+      function buildGrass(): void {
+        for (const type of grassTypes) {
+          const blade = MeshBuilder.CreatePlane(type.name, {}, scene);
+          blade.thinInstanceSetBuffer("matrix", type.matrices);
+        }
+      }
+    `);
+    const diagnostics = noRawMeshInLoopRule.check(sf, defaultBudget);
+    expect(diagnostics).toHaveLength(0);
+  });
+
+  it("should error when MeshBuilder.CreateBox is inside .forEach()", () => {
+    const sf = createSourceFile(`
+      positions.forEach(pos => {
+        const mesh = MeshBuilder.CreateBox("box", { size: 1 }, scene);
+        mesh.position = pos;
+      });
+    `);
+    const diagnostics = noRawMeshInLoopRule.check(sf, defaultBudget);
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics[0].message).toContain("loop");
+  });
+
+  it("should error when new Mesh() is inside .map()", () => {
+    const sf = createSourceFile(`
+      const meshes = positions.map(pos => {
+        return new Mesh("m", scene);
+      });
+    `);
+    const diagnostics = noRawMeshInLoopRule.check(sf, defaultBudget);
+    expect(diagnostics).toHaveLength(1);
+  });
+
+  it("should NOT error when .forEach() uses MergeMeshes", () => {
+    const sf = createSourceFile(`
+      function buildWall(): void {
+        const parts: Mesh[] = [];
+        segments.forEach(seg => {
+          parts.push(MeshBuilder.CreateBox("w", {}, scene));
+        });
+        Mesh.MergeMeshes(parts, true, true);
+      }
+    `);
+    const diagnostics = noRawMeshInLoopRule.check(sf, defaultBudget);
+    expect(diagnostics).toHaveLength(0);
+  });
+
   it("should still error when loop meshes are NOT merged", () => {
     const sf = createSourceFile(`
       function buildBuildings(): void {
@@ -179,6 +244,18 @@ describe("require-lod", () => {
     const diagnostics = requireLodRule.check(sf, openWorldBudget);
     expect(diagnostics).toHaveLength(0);
   });
+
+  it("should pass when addLODLevel is in a DIFFERENT file in the same project", () => {
+    const project = new Project({ useInMemoryFileSystem: true });
+    const meshLines = Array.from({ length: 110 }, (_, i) =>
+      `MeshBuilder.CreateBox("box${i}", { size: 1 }, scene);`
+    ).join("\n");
+    const worldFile = project.createSourceFile("world.ts", meshLines);
+    project.createSourceFile("scene-manager.ts", `mesh.addLODLevel(150, lowMesh);`);
+
+    const diagnostics = requireLodRule.check(worldFile, openWorldBudget);
+    expect(diagnostics).toHaveLength(0);
+  });
 });
 
 const octreeBudget: BudgetConfig = {
@@ -234,6 +311,18 @@ describe("require-octree", () => {
       MeshBuilder.CreateBox("b", {}, scene);
     `);
     const diagnostics = requireOctreeRule.check(sf, octreeBudget);
+    expect(diagnostics).toHaveLength(0);
+  });
+
+  it("should pass when octree is set up in a DIFFERENT file in the same project", () => {
+    const project = new Project({ useInMemoryFileSystem: true });
+    const meshLines = Array.from({ length: 210 }, (_, i) =>
+      `MeshBuilder.CreateBox("box${i}", { size: 1 }, scene);`
+    ).join("\n");
+    const worldFile = project.createSourceFile("world.ts", meshLines);
+    project.createSourceFile("scene-manager.ts", `scene.createOrUpdateSelectionOctree(64, 2);`);
+
+    const diagnostics = requireOctreeRule.check(worldFile, octreeBudget);
     expect(diagnostics).toHaveLength(0);
   });
 });

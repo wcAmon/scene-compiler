@@ -3,12 +3,13 @@ import { Command } from "commander";
 import { runValidate } from "./commands/validate.js";
 import { runInit } from "./commands/init.js";
 import { runBuild } from "./commands/build.js";
+import { runCreate } from "./commands/create.js";
 
 const program = new Command();
 
 program
   .name("scene")
-  .description("Scene Compiler CLI — validate, init, and build game scenes")
+  .description("Scene Compiler CLI — create, validate, init, and build game scenes")
   .version("0.1.0");
 
 program
@@ -50,6 +51,15 @@ program
   )
   .action((dir: string, opts: { budget?: string; public?: string }) => {
     const exitCode = runBuild(dir, opts);
+    process.exit(exitCode);
+  });
+
+program
+  .command("create")
+  .description("Create a new Babylon.js game project with scene-compiler")
+  .argument("<name>", "project name or path")
+  .action((name: string) => {
+    const exitCode = runCreate(name);
     process.exit(exitCode);
   });
 

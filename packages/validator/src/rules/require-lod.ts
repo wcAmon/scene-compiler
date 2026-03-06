@@ -38,8 +38,11 @@ export const requireLodRule: Rule = {
 
     if (meshCount <= threshold) return [];
 
-    const fileText = sourceFile.getFullText();
-    if (fileText.includes("addLODLevel")) return [];
+    // Check current file AND all other project files for LOD setup.
+    // LOD may be configured in a separate scene management file.
+    const allFiles = sourceFile.getProject().getSourceFiles();
+    const hasLOD = allFiles.some((f) => f.getFullText().includes("addLODLevel"));
+    if (hasLOD) return [];
 
     const severity = budget.lodRequired ? "error" : "warning";
     const filePath = sourceFile.getFilePath();
