@@ -1,90 +1,90 @@
 # Scene Design Patterns — Agent Skill Reference
 
-> 場景精細度不是靠更多的 code，而是靠**設計決策的層次**。
-> 本文件記錄從實戰中驗證過的場景設計模式。
+> Scene fidelity is not about more code, but about **layered design decisions**.
+> This document records scene design patterns validated through real-world practice.
 
 ---
 
-## 精細度金字塔
+## Fidelity Pyramid
 
-場景精細度由底層到頂層：
+Scene fidelity from bottom to top:
 
 ```
-Level 5: 互動回饋（破壞、連鎖爆炸、HUD 疊加）
-Level 4: 氛圍系統（燈光、霧、Glow、音效）
-Level 3: 環境點綴（路燈、招牌、機車、樹木）
-Level 2: 場景骨架（建築、道路、地形）
-Level 1: 遊戲機制（移動、射擊、碰撞）
+Level 5: Interactive Feedback (destruction, chain explosions, HUD overlays)
+Level 4: Atmosphere Systems (lighting, fog, Glow, sound effects)
+Level 3: Environmental Props (street lights, signs, scooters, trees)
+Level 2: Scene Skeleton (buildings, roads, terrain)
+Level 1: Game Mechanics (movement, shooting, collision)
 ```
 
-**常見錯誤：** Agent 花 80% 時間在 Level 1-2，跳過 Level 3-4 直接做 Level 5。
-**正確順序：** 完成每一層才往上走。Level 3-4 是「看起來精細」的關鍵。
+**Common mistake:** Agent spends 80% of time on Level 1-2, skips Level 3-4 and jumps directly to Level 5.
+**Correct order:** Complete each layer before moving up. Level 3-4 is the key to "looking polished".
 
 ---
 
-## Pattern 1: 多層燈光系統
+## Pattern 1: Multi-Layer Lighting System
 
-單一光源 = 平淡。三層光源 = 氛圍。
+Single light source = flat. Three-layer lighting = atmosphere.
 
-### 夜間場景（推薦配置）
+### Night Scene (Recommended Configuration)
 
 ```typescript
-// Layer 1: 月光（全局冷色基調）
+// Layer 1: Moonlight (global cool-tone base)
 const moonLight = new DirectionalLight("moon", new Vector3(0.3, -1, -0.5), scene);
 moonLight.intensity = 0.25;
-moonLight.diffuse = new Color3(0.6, 0.6, 0.85); // 冷藍白
+moonLight.diffuse = new Color3(0.6, 0.6, 0.85); // Cool blue-white
 
-// Layer 2: 環境光（極暗，僅防止全黑）
+// Layer 2: Ambient light (very dim, only prevents total darkness)
 const ambient = new HemisphericLight("ambient", new Vector3(0, 1, 0), scene);
 ambient.intensity = 0.18;
-ambient.groundColor = new Color3(0.05, 0.05, 0.08); // 幾乎無反彈光
+ambient.groundColor = new Color3(0.05, 0.05, 0.08); // Almost no bounce light
 
-// Layer 3: 路燈（暖色局部照明，製造對比）
-const lampPositions = [/* 路口四角 + 街道兩側 */];
+// Layer 3: Street lights (warm local illumination, creates contrast)
+const lampPositions = [/* Intersection corners + both sides of street */];
 for (const pos of lampPositions) {
   const lamp = new PointLight(`lamp`, pos, scene);
   lamp.intensity = 1.2;
-  lamp.diffuse = new Color3(1, 0.85, 0.55); // 暖橘
+  lamp.diffuse = new Color3(1, 0.85, 0.55); // Warm orange
   lamp.range = 18;
-  lamp.radius = 0.3; // 軟陰影
+  lamp.radius = 0.3; // Soft shadows
 }
 ```
 
-**為什麼有效：** 冷暖對比（月光 vs 路燈）自然引導視覺焦點到重要區域。
+**Why it works:** Cool-warm contrast (moonlight vs street lights) naturally guides visual focus to important areas.
 
-### 日間場景（替代配置）
+### Daytime Scene (Alternative Configuration)
 
 ```typescript
-// 太陽光 + 天空環境光 + 地面反射
+// Sunlight + sky ambient + ground reflection
 const sun = new DirectionalLight("sun", new Vector3(-0.5, -1, 0.3), scene);
 sun.intensity = 0.8;
-sun.diffuse = new Color3(1, 0.95, 0.85); // 暖白
+sun.diffuse = new Color3(1, 0.95, 0.85); // Warm white
 
 const sky = new HemisphericLight("sky", new Vector3(0, 1, 0), scene);
 sky.intensity = 0.4;
-sky.groundColor = new Color3(0.3, 0.25, 0.2); // 地面反射暖色
+sky.groundColor = new Color3(0.3, 0.25, 0.2); // Ground reflects warm tones
 ```
 
 ---
 
-## Pattern 2: 霧 = 免費的深度感
+## Pattern 2: Fog = Free Depth Perception
 
-霧不只是視覺效果，它是**效能優化工具**——遠處物件被霧遮蓋後，LOD 切換和消失不會突兀。
+Fog is not just a visual effect — it is a **performance optimization tool**. Objects obscured by fog allow LOD transitions and disappearances to go unnoticed.
 
 ```typescript
-// EXP2 霧（指數衰減，自然感最好）
+// EXP2 fog (exponential decay, most natural look)
 scene.fogMode = Scene.FOGMODE_EXP2;
-scene.fogDensity = 0.012;        // 密度：0.008（薄霧）到 0.02（濃霧）
-scene.fogColor = new Color4(0.03, 0.03, 0.08, 1); // 配合夜空色
+scene.fogDensity = 0.012;        // Density: 0.008 (thin) to 0.02 (thick)
+scene.fogColor = new Color4(0.03, 0.03, 0.08, 1); // Match night sky color
 ```
 
-**霧色規則：** 霧色 = 天空色 × 0.3。夜景用深藍黑，日景用淺灰藍。
+**Fog color rule:** Fog color = sky color x 0.3. Use dark blue-black for night, light gray-blue for day.
 
 ---
 
-## Pattern 3: GlowLayer（霓虹 / 發光效果）
+## Pattern 3: GlowLayer (Neon / Emissive Effects)
 
-選擇性發光比全場景發光更有效——只讓招牌、燈頭、特效發光。
+Selective glow is more effective than full-scene glow — only make signs, lamp heads, and effects glow.
 
 ```typescript
 const glow = new GlowLayer("glow", scene, {
@@ -94,46 +94,46 @@ const glow = new GlowLayer("glow", scene, {
 });
 glow.intensity = 0.6;
 
-// 排除不需要發光的 mesh
+// Exclude meshes that should not glow
 glow.addExcludedMesh(ground);
 glow.addExcludedMesh(road);
 
-// 或者反向：只包含特定 mesh
+// Or inversely: only include specific meshes
 glow.addIncludedOnlyMesh(neonSign);
 glow.addIncludedOnlyMesh(lampHead);
 ```
 
-**Emissive 材質配合：**
+**Emissive material pairing:**
 ```typescript
-// 招牌材質
+// Sign material
 const neonMat = new StandardMaterial("neon", scene);
-neonMat.emissiveColor = new Color3(1, 0.2, 0.5); // 粉紅霓虹
+neonMat.emissiveColor = new Color3(1, 0.2, 0.5); // Pink neon
 neonMat.diffuseColor = Color3.Black();
 neonMat.freeze();
 ```
 
 ---
 
-## Pattern 4: 環境點綴密度
+## Pattern 4: Environmental Prop Density
 
-場景精細感來自**適當密度的環境物件**。太少 = 空曠，太多 = 雜亂。
+Scene fidelity comes from **appropriate density of environmental objects**. Too few = barren, too many = cluttered.
 
-### 密度參考（每 100m 街道）
+### Density Reference (per 100m of street)
 
-| 物件類型 | 數量 | 放置規則 |
+| Object Type | Count | Placement Rules |
 |---------|------|---------|
-| 路燈 | 6-10 | 兩側交錯，間距 15-20m |
-| 街樹 | 8-12 | 人行道內側，間距 10-15m |
-| 停放機車 | 10-15 | 2-3 台一組，路邊群聚 |
-| 招牌 | 每棟建築 50-70% 機率 | 隨機色彩（粉/綠/藍/金/紫） |
-| 電線桿 | 2-4 | 路口附近 |
+| Street lights | 6-10 | Staggered on both sides, 15-20m spacing |
+| Street trees | 8-12 | Inside of sidewalk, 10-15m spacing |
+| Parked scooters | 10-15 | Groups of 2-3, clustered at curbs |
+| Signs | 50-70% chance per building | Random colors (pink/green/blue/gold/purple) |
+| Utility poles | 2-4 | Near intersections |
 
-### 確定性隨機放置
+### Deterministic Random Placement
 
-用 seeded random 保證每次生成一樣的結果（多人連線必須）：
+Use seeded random to guarantee identical results each generation (required for multiplayer):
 
 ```typescript
-// 簡易 LCG 隨機數產生器
+// Simple LCG random number generator
 function createSeededRandom(seed: number) {
   let s = seed;
   return () => {
@@ -144,97 +144,99 @@ function createSeededRandom(seed: number) {
 
 const random = createSeededRandom(42);
 
-// 機車群聚放置
+// Scooter cluster placement
 for (const group of scooterGroups) {
-  const count = 2 + Math.floor(random() * 3); // 2-4 台一組
+  const count = 2 + Math.floor(random() * 3); // 2-4 per group
   for (let i = 0; i < count; i++) {
     const instance = container.instantiateModelsToScene();
     const root = instance.rootNodes[0];
     root.position = group.center.add(
       new Vector3(random() * 2 - 1, 0, random() * 2 - 1)
     );
-    root.rotation.y = group.baseAngle + random() * 0.35; // 微小角度偏差
+    root.rotation.y = group.baseAngle + random() * 0.35; // Slight angle variation
   }
 }
 ```
 
 ---
 
-## Pattern 5: 手工空間設計 > 程序生成
+## Pattern 5: Hand-Crafted Spatial Design > Procedural Generation
 
-小規模地圖（< 200m × 200m）用手工設計比程序生成更有品質。
+For small maps (< 200m x 200m), hand-crafted design yields higher quality than procedural generation.
 
-### T 字路口範例（台北戰線）
+### T-Intersection Example (Taipei Frontline)
 
 ```
          ┌──────────┐
-         │  建築群   │
+         │ Building  │
+         │  Cluster  │
     ─────┤          ├─────
- 主路 14m │  T 路口  │ 支路 43m
-    ─────┤   中心   ├─────
-         │  建築群   │
+ Main 14m│ T-Inter- │ Side St 43m
+    ─────┤  section ├─────
+         │ Building  │
+         │  Cluster  │
          └──────────┘
 ```
 
-**設計原則：**
-- 路口中心 = 自然交火熱點
-- 轉角 = 掩體位置
-- 支路 = 側翼攻擊路線
-- 每個位置都有遊玩意義，沒有「純裝飾」的空間
+**Design principles:**
+- Intersection center = natural firefight hotspot
+- Corners = cover positions
+- Side streets = flanking routes
+- Every location has gameplay purpose — no "purely decorative" spaces
 
-### 建築放置
+### Building Placement
 
 ```typescript
-// 不是隨機排列——每棟建築有意圖
+// Not randomly arranged — every building has intent
 const buildings = [
-  { model: "convenience_store", pos: [12, 0, 5], rot: Math.PI,   // 面向主路
-    emissive: true },   // 便利商店有暖光
-  { model: "arcade_apartment", pos: [12, 0, 20], rot: Math.PI,  // 公寓無光
-    emissive: false },  // 明暗對比
-  { model: "tea_shop", pos: [-12, 0, 35], rot: 0,               // 面向主路
-    emissive: true },   // 茶店有霓虹
+  { model: "convenience_store", pos: [12, 0, 5], rot: Math.PI,   // Faces main road
+    emissive: true },   // Convenience store has warm light
+  { model: "arcade_apartment", pos: [12, 0, 20], rot: Math.PI,  // Apartment is dark
+    emissive: false },  // Light-dark contrast
+  { model: "tea_shop", pos: [-12, 0, 35], rot: 0,               // Faces main road
+    emissive: true },   // Tea shop has neon
 ];
 ```
 
 ---
 
-## Pattern 6: 多層回饋疊加
+## Pattern 6: Multi-Layer Feedback Stacking
 
-每個遊戲事件觸發**多個同時回饋**，這是「遊戲感」的核心：
+Every game event triggers **multiple simultaneous feedback layers** — this is the core of "game feel":
 
-### 「擊中敵人」的回饋堆疊
+### "Hit Enemy" Feedback Stack
 
-| 層級 | 回饋 | 持續時間 |
+| Layer | Feedback | Duration |
 |------|------|---------|
-| 視覺 | 準星收縮 | 100ms |
-| 視覺 | 命中標記（X 形閃爍） | 200ms |
-| 視覺 | 傷害數字飄起 | 500ms |
-| 視覺 | 敵人命中閃白 | 50ms |
-| 音效 | 命中音效（tick） | 即時 |
-| HUD | 連殺計數器 +1 | 持續 |
-| 觸覺 | 畫面微震（可選） | 50ms |
+| Visual | Crosshair contraction | 100ms |
+| Visual | Hit marker (X-shape flash) | 200ms |
+| Visual | Damage number float-up | 500ms |
+| Visual | Enemy hit-flash white | 50ms |
+| Audio | Hit sound (tick) | Instant |
+| HUD | Kill streak counter +1 | Persistent |
+| Haptic | Screen micro-shake (optional) | 50ms |
 
-### 「玩家受傷」的回饋堆疊
+### "Player Takes Damage" Feedback Stack
 
-| 層級 | 回饋 | 持續時間 |
+| Layer | Feedback | Duration |
 |------|------|---------|
-| 視覺 | 白色閃光覆蓋 | 100ms |
-| 視覺 | 畫面邊緣血跡 | 2s 淡出 |
-| 視覺 | 傷害方向弧線 | 1s |
-| 視覺 | 低血量紅色脈動邊框 | 持續（HP < 30%） |
-| 音效 | 受擊音效 | 即時 |
-| HUD | 血條動畫下降 | 300ms |
+| Visual | White flash overlay | 100ms |
+| Visual | Screen-edge blood splatter | 2s fade-out |
+| Visual | Damage direction arc | 1s |
+| Visual | Low-HP red pulsing border | Persistent (HP < 30%) |
+| Audio | Hit-taken sound | Instant |
+| HUD | Health bar animated decrease | 300ms |
 
-**實作原則：** 每個回饋是獨立模組，透過事件系統觸發，不耦合在遊戲邏輯裡。
+**Implementation principle:** Each feedback is an independent module, triggered via the event system, not coupled into game logic.
 
 ---
 
-## Pattern 7: 程序化音效（零資源檔案）
+## Pattern 7: Procedural Sound Effects (Zero Asset Files)
 
-用 Web Audio API 合成所有音效，不載入 .mp3/.wav：
+Synthesize all sound effects with Web Audio API — no .mp3/.wav loading:
 
 ```typescript
-// 槍聲 = 白噪音 + 指數衰減 + 低通濾波
+// Gunshot = white noise + exponential decay + lowpass filter
 function playGunshot(ctx: AudioContext) {
   const buffer = ctx.createBuffer(1, ctx.sampleRate * 0.08, ctx.sampleRate);
   const data = buffer.getChannelData(0);
@@ -254,53 +256,53 @@ function playGunshot(ctx: AudioContext) {
 }
 ```
 
-**優點：**
-- 零載入時間
-- 可即時調整參數（音高、音量隨遊戲事件變化）
-- 不佔磁碟空間
+**Advantages:**
+- Zero load time
+- Parameters adjustable in real-time (pitch, volume change with game events)
+- No disk space usage
 
 ---
 
-## Pattern 8: 攝影機視角決定細節優先級
+## Pattern 8: Camera Angle Determines Detail Priority
 
-### 第三人稱（TPS）
-
-```
-攝影機在角色背後 8-12 單位 → 建築正面品質 > 屋頂 > 背面
-                           → 地面細節中等重要
-                           → 天空幾乎不可見
-```
-
-### 俯視角（Top-down）
+### Third-Person (TPS)
 
 ```
-攝影機在上方 45° → 屋頂品質 > 正面 > 背面
-                 → 地面紋理非常重要
-                 → 物件輪廓清晰度 > 表面細節
+Camera 8-12 units behind character → Building front quality > rooftop > back
+                                   → Ground detail moderately important
+                                   → Sky almost invisible
 ```
 
-### Portrait 手機遊戲（3/4 視角）
+### Top-Down
 
 ```
-固定攝影機角度 → 前景層次感 > 背景
-              → 角色辨識度最重要
-              → 背景可用低面數 + 霧遮蓋
+Camera at 45° above → Rooftop quality > front > back
+                    → Ground texture very important
+                    → Object silhouette clarity > surface detail
 ```
 
-**規則：** 先確定攝影機類型，再決定每個物件哪個面需要細節。不要均勻分配面數。
+### Portrait Mobile Game (3/4 View)
+
+```
+Fixed camera angle → Foreground layering > background
+                   → Character readability is most important
+                   → Background can use low-poly + fog cover
+```
+
+**Rule:** Determine camera type first, then decide which face of each object needs detail. Do not distribute polygon count uniformly.
 
 ---
 
-## 檢查清單：場景精細度自評
+## Checklist: Scene Fidelity Self-Assessment
 
-完成遊戲場景後，逐項檢查：
+After completing a game scene, check each item:
 
-- [ ] **燈光**：是否有 2 層以上光源？是否有冷暖對比？
-- [ ] **霧**：是否啟用霧效果？霧色是否配合天空？
-- [ ] **發光**：是否有選擇性 GlowLayer？招牌/燈頭是否發光？
-- [ ] **環境物件**：路燈、樹木、停放車輛是否有適當密度？
-- [ ] **隨機性**：環境物件是否用 seeded random 放置？
-- [ ] **音效**：是否有環境音 + 動作音效？至少 5 種不同音效？
-- [ ] **HUD 回饋**：每個遊戲事件是否有 3+ 層同時回饋？
-- [ ] **空間意圖**：每個區域是否有遊玩功能（不只是裝飾）？
-- [ ] **攝影機適配**：物件細節是否根據攝影機角度分配？
+- [ ] **Lighting**: Are there 2+ light source layers? Is there cool-warm contrast?
+- [ ] **Fog**: Is fog enabled? Does fog color match the sky?
+- [ ] **Glow**: Is there selective GlowLayer? Do signs/lamp heads glow?
+- [ ] **Environmental props**: Do street lights, trees, parked vehicles have appropriate density?
+- [ ] **Randomness**: Are environmental props placed with seeded random?
+- [ ] **Sound**: Are there ambient sounds + action sound effects? At least 5 different effects?
+- [ ] **HUD feedback**: Does every game event have 3+ simultaneous feedback layers?
+- [ ] **Spatial intent**: Does every area have gameplay function (not just decoration)?
+- [ ] **Camera adaptation**: Is object detail allocated based on camera angle?

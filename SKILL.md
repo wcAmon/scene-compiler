@@ -148,17 +148,17 @@ window.addEventListener("resize", () => engine.resize());
 
 ### Viewport Aspect Ratio — Portrait vs Landscape
 
-遊戲的畫面方向（portrait 或 landscape）決定 canvas 和 camera 的設定方式。**必須在開發初期決定**。
+The game's display orientation (portrait or landscape) determines how the canvas and camera are configured. **This must be decided early in development.**
 
-#### Portrait 遊戲（直向，如手機射擊、跑酷）
+#### Portrait Games (vertical, e.g. mobile shooters, runners)
 
 ```typescript
 import { Camera } from "@babylonjs/core";
 
-// 垂直 FOV 固定 — 確保上下永遠完整顯示
+// Vertical FOV fixed — ensures top and bottom are always fully visible
 camera.fovMode = Camera.FOVMODE_VERTICAL_FIXED;
 
-// Canvas 維持 9:16 比例，桌面端 pillarbox（兩側黑邊）
+// Canvas maintains 9:16 ratio, pillarboxed (black bars on sides) on desktop
 const TARGET_RATIO = 9 / 16;
 
 function resizeCanvas() {
@@ -168,11 +168,11 @@ function resizeCanvas() {
 
   let w: number, h: number;
   if (windowRatio > TARGET_RATIO) {
-    // 視窗比 canvas 寬 → pillarbox（以高度為基準）
+    // Window is wider than canvas — pillarbox (height-based)
     h = vh;
     w = Math.floor(vh * TARGET_RATIO);
   } else {
-    // 視窗比 canvas 窄 → letterbox（以寬度為基準）
+    // Window is narrower than canvas — letterbox (width-based)
     w = vw;
     h = Math.floor(vw / TARGET_RATIO);
   }
@@ -189,20 +189,20 @@ resizeCanvas();
 window.addEventListener("resize", resizeCanvas);
 ```
 
-#### Landscape 遊戲（橫向，如 TPS、開放世界）
+#### Landscape Games (horizontal, e.g. TPS, open world)
 
 ```typescript
-// 水平 FOV 固定（預設行為）— 確保左右永遠完整
+// Horizontal FOV fixed (default behavior) — ensures left and right are always fully visible
 camera.fovMode = Camera.FOVMODE_HORIZONTAL_FIXED;
 
-// Canvas 填滿視窗即可
+// Canvas fills the viewport
 window.addEventListener("resize", () => engine.resize());
 ```
 
-**規則：**
-- Portrait 遊戲 **禁止** 用 `FOVMODE_HORIZONTAL_FIXED`（會導致桌面上下被切）
-- Landscape 遊戲 **禁止** 用 `FOVMODE_VERTICAL_FIXED`（會導致手機左右被切）
-- 確定方向後，index.html 的 body style 設 `background: #000` 讓黑邊自然融入
+**Rules:**
+- Portrait games **must NOT** use `FOVMODE_HORIZONTAL_FIXED` (causes top/bottom clipping on desktop)
+- Landscape games **must NOT** use `FOVMODE_VERTICAL_FIXED` (causes left/right clipping on mobile)
+- Once the orientation is decided, set `background: #000` on the body style in index.html so black bars blend naturally
 
 ### Material — Always Freeze
 
@@ -388,11 +388,11 @@ runtime.dispose();
 ```typescript
 import { ScreenshotService, CaptureAPI } from "@scene-compiler/capture";
 
-// 需要 engine + scene 兩個參數
+// Requires both engine and scene parameters
 const screenshots = new ScreenshotService(engine, scene);
 await screenshots.capture(camera, { label: "spawn-point", width: 1280, height: 720 });
 
-// 啟用 postMessage API（外部工具可透過 window.postMessage 觸發截圖）
+// Enable postMessage API (external tools can trigger screenshots via window.postMessage)
 const captureAPI = new CaptureAPI(screenshots, () => camera);
 captureAPI.listen();
 ```
@@ -403,67 +403,67 @@ captureAPI.listen();
 
 ### 1. `instantiateModelsToScene is not a function`
 
-`ImportMeshAsync` 返回 `{ meshes, ... }` — 不能呼叫 `.instantiateModelsToScene()`。
-該方法只存在於 `AssetContainer`（由 `LoadAssetContainerAsync` 返回）。
-詳見上方「GLB Loading」。
+`ImportMeshAsync` returns `{ meshes, ... }` — you cannot call `.instantiateModelsToScene()` on it.
+This method only exists on `AssetContainer` (returned by `LoadAssetContainerAsync`).
+See the "GLB Loading" section above.
 
 ### 2. `addObjectRenderer is not a function` (Babylon.js 7.54.x)
 
-`Tools.CreateScreenshotUsingRenderTarget()` 內部建立 `RenderTargetTexture`，
-其 constructor 呼叫 `scene.addObjectRenderer()` — 但此方法在 7.54.x 不存在。
-**解法**：使用 `Tools.CreateScreenshot()`（canvas-based，不需 RTT）。
-scene-compiler 的 `ScreenshotService` 已使用此方案。
+`Tools.CreateScreenshotUsingRenderTarget()` internally creates a `RenderTargetTexture`,
+whose constructor calls `scene.addObjectRenderer()` — but this method does not exist in 7.54.x.
+**Fix**: Use `Tools.CreateScreenshot()` (canvas-based, no RTT needed).
+scene-compiler's `ScreenshotService` already uses this approach.
 
 ### 3. `ScreenshotTools needs to be imported before`
 
-Babylon.js v7 tree-shaking 會移除 `screenshotTools` 模組。
-需要 side-effect import：`import "@babylonjs/core/Misc/screenshotTools";`
-scene-compiler 的 `ScreenshotService` 已包含此 import。
+Babylon.js v7 tree-shaking removes the `screenshotTools` module.
+A side-effect import is required: `import "@babylonjs/core/Misc/screenshotTools";`
+scene-compiler's `ScreenshotService` already includes this import.
 
-### 4. Ground Raycast 打到角色自己的 mesh → 人物飛天
+### 4. Ground raycast hitting the character's own mesh — character flies upward
 
-`scene.pickWithRay` 的 predicate 如果只排除碰撞體（collisionRoot），
-角色 GLB 模型的可見子 mesh（腳、身體）仍會被射線命中。
-Raycast 把角色自己的 mesh 當成「地面」→ 把 position.y 推高 → 下一幀又更高 → 無限上升。
+If `scene.pickWithRay`'s predicate only excludes the collision root (collisionRoot),
+the character GLB model's visible child meshes (feet, body) will still be hit by the ray.
+The raycast treats the character's own mesh as "ground" — pushes position.y up — next frame even higher — infinite ascent.
 
 ```typescript
-// BAD — 只排除 collisionRoot，GLB mesh 仍會被 raycast 擊中
+// BAD — only excludes collisionRoot, GLB meshes still get hit by raycast
 const hit = scene.pickWithRay(ray, (mesh) => {
   return mesh !== this.collisionRoot && mesh.isPickable && mesh.isVisible;
 });
 
-// GOOD — 排除所有角色自身的 mesh
+// GOOD — excludes all of the character's own meshes
 const hit = scene.pickWithRay(ray, (mesh) => {
   return mesh !== this.collisionRoot && !this.meshes.includes(mesh)
     && mesh.isPickable && mesh.isVisible;
 });
 ```
 
-**適用所有 raycast 場景**：地面偵測、互動偵測、射擊 — 都必須排除 ray 發射者自身的 mesh。
+**Applies to all raycast scenarios**: ground detection, interaction detection, shooting — always exclude the ray emitter's own meshes.
 
-### 5. Render Observable 裡的 ReferenceError 會靜默凍結遊戲
+### 5. ReferenceError in render observables silently freezes the game
 
-在 `scene.onBeforeRenderObservable` 或 `onAfterRenderObservable` 的 callback 裡，
-如果拋出未捕捉的 `ReferenceError`（例如引用了不在作用域的變數），
-**錯誤不會讓遊戲 crash**，但會中斷整個 observable 鏈的後續 callback。
+In `scene.onBeforeRenderObservable` or `onAfterRenderObservable` callbacks,
+if an uncaught `ReferenceError` is thrown (e.g. referencing a variable not in scope),
+**the error will not crash the game**, but it will interrupt all subsequent callbacks in the observable chain.
 
-這導致的症狀是「遊戲看似在跑、畫面有渲染，但某些邏輯完全停擺」，
-例如 countdown 永遠卡在 3、狀態機不推進、AI 不行動。
+The symptom is "the game appears to be running and rendering, but certain logic has completely stopped" —
+for example, a countdown stuck at 3, state machine not advancing, AI not acting.
 
-**關鍵原則**：
-- 獨立函數（非 `main()` 內的閉包）不能直接引用 `main()` 的局部變數，改用 DOM 查詢或傳參
-- 任何新增的 render observable callback，都要確認所有引用的變數在作用域內
-- Debug 時優先檢查 console error — 即使只出現一次，若在 render loop 裡就代表每幀都拋
+**Key principles:**
+- Standalone functions (not closures inside `main()`) cannot directly reference `main()`'s local variables — use DOM queries or pass parameters instead
+- For any new render observable callback, verify that all referenced variables are in scope
+- When debugging, check console errors first — even if the error appears only once, if it's in the render loop it means it throws every frame
 
 ```typescript
-// BAD — _createHUD 是獨立函數，看不到 main() 裡的 lobby
+// BAD — _createHUD is a standalone function, cannot see lobby from main()
 function _createHUD(scene: Scene, player: PlayerController): void {
   scene.onAfterRenderObservable.add(() => {
     hudEl.style.display = lobby.isVisible ? "none" : "block"; // ReferenceError!
   });
 }
 
-// GOOD — 透過 DOM 查詢取代直接引用
+// GOOD — use DOM query instead of direct reference
 function _createHUD(scene: Scene, player: PlayerController): void {
   scene.onAfterRenderObservable.add(() => {
     const lobbyEl = document.getElementById("lobby-overlay");
@@ -472,22 +472,22 @@ function _createHUD(scene: Scene, player: PlayerController): void {
 }
 ```
 
-### 6. requestPointerLock 失敗會觸發暫停 → 凍結遊戲
+### 6. requestPointerLock failure triggers pause — freezes the game
 
-`canvas.requestPointerLock()` 是非同步的。如果瀏覽器拒絕（使用者未互動、手機不支援），
-會觸發 `pointerlockchange` 事件且 `pointerLockElement === null`。
-若你的暫停邏輯是「偵測 pointer lock 釋放 → 暫停」，這會在遊戲開始時**立刻暫停**。
+`canvas.requestPointerLock()` is asynchronous. If the browser rejects it (user has not interacted, mobile does not support it),
+it triggers a `pointerlockchange` event with `pointerLockElement === null`.
+If your pause logic is "detect pointer lock release — pause", this will **immediately pause** at game start.
 
-**解法**：不要在 countdown 期間呼叫 `requestPointerLock()`，等到實際需要玩家操控時（波次開始）才鎖。
+**Fix**: Do not call `requestPointerLock()` during the countdown. Wait until player control is actually needed (wave start) before locking.
 
 ```typescript
-// BAD — countdown 還沒結束就鎖指標，失敗 → 立刻暫停
+// BAD — locks pointer before countdown ends, failure — immediate pause
 combatHUD.onDifficultySelected = (difficulty) => {
   waveSystem.start(difficulty);
-  canvas.requestPointerLock(); // 可能失敗 → 觸發 pause
+  canvas.requestPointerLock(); // may fail — triggers pause
 };
 
-// GOOD — 等 countdown 結束、波次開始才鎖
+// GOOD — wait until countdown ends and wave starts before locking
 waveSystem.onWaveStarted = (wave) => {
   if (!document.pointerLockElement) {
     canvas.requestPointerLock();
@@ -495,34 +495,34 @@ waveSystem.onWaveStarted = (wave) => {
 };
 ```
 
-### 7. freezeWorldMatrix 後切換可見性用 setEnabled()，不用 scaling
+### 7. After freezeWorldMatrix, use setEnabled() to toggle visibility — not scaling
 
-`freezeWorldMatrix()` 告訴引擎不再重算世界矩陣。之後如果用 `mesh.scaling = Vector3.Zero()` 來「隱藏」mesh，
-引擎不會更新矩陣，mesh 看起來不會消失（或行為不一致）。
+`freezeWorldMatrix()` tells the engine to stop recalculating the world matrix. If you then use `mesh.scaling = Vector3.Zero()` to "hide" the mesh,
+the engine will not update the matrix, and the mesh will not visually disappear (or behave inconsistently).
 
 ```typescript
-// BAD — frozen mesh 的 scaling 不會生效
+// BAD — scaling has no effect on a frozen mesh
 mesh.freezeWorldMatrix();
-mesh.scaling = Vector3.Zero(); // 無效！矩陣已凍結
+mesh.scaling = Vector3.Zero(); // No effect! Matrix is frozen
 
-// GOOD — setEnabled 直接從渲染列表移除，不需要矩陣更新
+// GOOD — setEnabled removes from the render list directly, no matrix update needed
 mesh.freezeWorldMatrix();
-mesh.setEnabled(false); // ✅ 正確隱藏
-mesh.setEnabled(true);  // ✅ 正確顯示
+mesh.setEnabled(false); // Correctly hides
+mesh.setEnabled(true);  // Correctly shows
 ```
 
-### 8. 多關卡 / 多波次：return early，不 removeCallback
+### 8. Multi-level / multi-wave: return early, do not removeCallback
 
-在 `scene.onBeforeRenderObservable` 裡的 update loop，關卡結束時**不要移除 callback**。
-移除後重新註冊容易造成重複註冊或忘記註冊。改用狀態判斷 return early。
+In update loops inside `scene.onBeforeRenderObservable`, **do not remove the callback** when a level ends.
+Removing and re-registering easily causes duplicate registrations or missed registrations. Use state checks to return early instead.
 
 ```typescript
-// BAD — 移除再重新加，容易出 bug
+// BAD — removing and re-adding is error-prone
 scene.onBeforeRenderObservable.removeCallback(updateFn);
-// ... 下一關開始 ...
-scene.onBeforeRenderObservable.add(updateFn); // 可能重複加
+// ... next level starts ...
+scene.onBeforeRenderObservable.add(updateFn); // may add duplicates
 
-// GOOD — 永遠保留 callback，狀態判斷 skip
+// GOOD — always keep the callback, use state checks to skip
 scene.onBeforeRenderObservable.add(() => {
   if (gameState === "level_complete" || gameState === "paused") return;
   updateEnemies(dt);
@@ -530,65 +530,65 @@ scene.onBeforeRenderObservable.add(() => {
 });
 ```
 
-### 9. 關卡切換：deactivateAll，不 dispose
+### 9. Level transitions: deactivateAll, do not dispose
 
-切關卡時把物件池裡的東西全部停用（歸位 + `setEnabled(false)`），不要 `dispose()`。
-Dispose 後需要重建 mesh 和材質，成本高且容易漏。
+When switching levels, deactivate all objects in the pool (reset position + `setEnabled(false)`) instead of calling `dispose()`.
+After dispose, meshes and materials need to be recreated, which is costly and error-prone.
 
 ```typescript
-// BAD — dispose 後下一關要重建所有 mesh
+// BAD — after dispose, all meshes must be rebuilt for the next level
 enemies.forEach(e => e.mesh.dispose());
 bullets.forEach(b => b.mesh.dispose());
 
-// GOOD — 停用歸位，下一關直接重新啟用
+// GOOD — deactivate and reset, reactivate directly for the next level
 function deactivateAll(pool: { mesh: AbstractMesh; active: boolean }[]) {
   for (const item of pool) {
     item.active = false;
     item.mesh.setEnabled(false);
-    item.mesh.position.set(0, -100, 0); // 移到場外
+    item.mesh.position.set(0, -100, 0); // move off-screen
   }
 }
 
-// 下一關開始時，只需 activate 需要的數量
+// At next level start, just activate the needed quantity
 ```
 
-### 10. 多人連線：Host re-broadcast + sender 自我過濾
+### 10. Multiplayer: Host re-broadcast + sender self-filtering
 
-在 WebSocket 多人架構中，Host 收到訊息後 re-broadcast 給所有玩家（包括發送者）。
-發送者收到自己的訊息時必須過濾掉，否則會重複處理。
+In a WebSocket multiplayer architecture, the host re-broadcasts received messages to all players (including the sender).
+The sender must filter out its own messages when received, otherwise they will be processed twice.
 
 ```typescript
-// Host 端：收到訊息 → broadcast 給所有人
+// Host side: receive message — broadcast to everyone
 ws.onmessage = (msg) => {
   const data = JSON.parse(msg.data);
   // Re-broadcast to all connected clients
   for (const client of clients) {
     client.send(msg.data);
   }
-  // Host 自己也處理
+  // Host processes it too
   handleGameMessage(data);
 };
 
-// Client 端：過濾自己發的訊息
+// Client side: filter out own messages
 ws.onmessage = (msg) => {
   const data = JSON.parse(msg.data);
-  if (data.senderId === myPlayerId) return; // ← 關鍵：跳過自己
+  if (data.senderId === myPlayerId) return; // Key: skip own messages
   handleGameMessage(data);
 };
 ```
 
-### 11. 多人插值：幀率無關的平滑追蹤
+### 11. Multiplayer interpolation: frame-rate-independent smooth tracking
 
-網路同步中，用 `1 - Math.pow(base, dt)` 做插值可確保不同幀率的機器看到一致的平滑度。
-`base` 越小，追蹤越快（0.001 = 幾乎瞬間，0.1 = 緩慢平滑）。
+In network synchronization, use `1 - Math.pow(base, dt)` for interpolation to ensure consistent smoothness across different frame rates.
+Smaller `base` values mean faster tracking (0.001 = nearly instant, 0.1 = slow and smooth).
 
 ```typescript
-// BAD — 幀率依賴，60fps 和 30fps 的平滑感不同
+// BAD — frame-rate dependent, smoothing differs between 60fps and 30fps
 mesh.position = Vector3.Lerp(mesh.position, targetPos, 0.1);
 
-// GOOD — 幀率無關，任何 fps 下表現一致
-const dt = engine.getDeltaTime() / 1000; // 秒
-const alpha = 1 - Math.pow(0.001, dt); // 0.001 = 追蹤速度（越小越快）
+// GOOD — frame-rate independent, consistent behavior at any fps
+const dt = engine.getDeltaTime() / 1000; // seconds
+const alpha = 1 - Math.pow(0.001, dt); // 0.001 = tracking speed (smaller = faster)
 mesh.position = Vector3.Lerp(mesh.position, targetPos, alpha);
 ```
 
@@ -664,105 +664,105 @@ node --import tsx /home/wake/scene-compiler/packages/cli/src/index.ts create <na
 
 ---
 
-## 開放世界優化原則
+## Open World Optimization Principles
 
-> 當 `game.budget.json` 的 `openWorld.lodRequired = true` 或 `octreeRequired = true` 時必讀。
-> scene-compiler 的 `require-lod` 和 `require-octree` 規則會強制執行這些原則。
+> Required reading when `game.budget.json` has `openWorld.lodRequired = true` or `octreeRequired = true`.
+> scene-compiler's `require-lod` and `require-octree` rules enforce these principles.
 
-### 核心概念：Frame Budget ≠ World Budget
+### Core Concept: Frame Budget ≠ World Budget
 
 ```
-frame.maxActiveMeshes: 500  →  任何一幀最多 500 個 mesh 渲染
-世界總 mesh 數：無上限        →  由 LOD + Octree + Streaming 管理差距
+frame.maxActiveMeshes: 500  →  At most 500 meshes rendered in any single frame
+Total world mesh count: unlimited  →  The gap is managed by LOD + Octree + Streaming
 ```
 
-**錯誤認知**：看到 `maxActiveMeshes: 500` 就認為整個世界只能有 500 個物件。
-**正確認知**：世界可以有 10,000 個物件，但只要同時渲染不超過 500 個就合規。
+**Wrong assumption**: Seeing `maxActiveMeshes: 500` and thinking the entire world can only have 500 objects.
+**Correct understanding**: The world can have 10,000 objects, as long as no more than 500 are rendered simultaneously.
 
-### 比例閘門 — 世界規模 vs 必要優化
+### Threshold Gates — World Scale vs Required Optimizations
 
-| 檔案內 mesh 建立數量 | 必要優化 | scene-compiler 行為 |
+| Mesh creation count in file | Required optimization | scene-compiler behavior |
 |---------------------|---------|-------------------|
-| < 100（maxActiveMeshes × 0.2） | 無 | 靜默 |
-| ≥ 100 | LOD | WARNING / ERROR（依 lodRequired） |
-| ≥ 200（maxActiveMeshes × 0.4） | Octree | WARNING / ERROR（依 octreeRequired） |
+| < 100 (maxActiveMeshes x 0.2) | None | Silent |
+| >= 100 | LOD | WARNING / ERROR (depends on lodRequired) |
+| >= 200 (maxActiveMeshes x 0.4) | Octree | WARNING / ERROR (depends on octreeRequired) |
 
-### LOD 實作模式
+### LOD Implementation Pattern
 
 ```typescript
-// 一個 mesh 設定 LOD：近距離高細節，遠距離低細節，極遠消失
+// Set up LOD for a mesh: high detail up close, low detail far away, hidden at extreme distance
 const highMesh = MeshBuilder.CreateBox("building", { ... }, scene);
 const lowMesh = MeshBuilder.CreateBox("building_low", { ... }, scene);
 
-highMesh.addLODLevel(150, lowMesh);   // 超過 150 單位換低細節
-highMesh.addLODLevel(300, null);      // 超過 300 單位不渲染
+highMesh.addLODLevel(150, lowMesh);   // Switch to low detail beyond 150 units
+highMesh.addLODLevel(300, null);      // Stop rendering beyond 300 units
 ```
 
-### Octree 實作模式
+### Octree Implementation Pattern
 
 ```typescript
-// 在場景所有靜態 mesh 建立完畢後呼叫一次
-// 將 CPU culling 從 O(n) 降為 O(log n)
+// Call once after all static meshes have been created
+// Reduces CPU culling from O(n) to O(log n)
 scene.createOrUpdateSelectionOctree(32, 2);
-// 32 = 最大每節點容量, 2 = 最大深度
+// 32 = max capacity per node, 2 = max depth
 ```
 
-### NPC Distance Culling（已在 NPCManager 正確實作）
+### NPC Distance Culling (already correctly implemented in NPCManager)
 
 ```typescript
-// 每 CHECK_INTERVAL 幀才做一次距離判斷（節流）
+// Check distance only every CHECK_INTERVAL frames (throttled)
 if (this.frameCounter % CHECK_INTERVAL === 0) {
   for (const npc of this.npcs) {
     const dist = Vector3.Distance(npc.root.position, playerPos);
-    npc.active = dist < ACTIVATION_RADIUS;  // 超出範圍停用
+    npc.active = dist < ACTIVATION_RADIUS;  // Deactivate if out of range
     npc.meshes.forEach(m => m.setEnabled(npc.active));
   }
 }
 ```
 
-### 豁免模式：merge-after-loop（不觸發 no-raw-mesh-in-loop）
+### Exempt Pattern: merge-after-loop (does not trigger no-raw-mesh-in-loop)
 
 ```typescript
-// 正確模式：在迴圈內建立 mesh，最後合併為一個 draw call
+// Correct pattern: create meshes in a loop, then merge into a single draw call
 function buildLaneMarkings(): void {
   const dashes: Mesh[] = [];
   for (let x = -250; x < 250; x += 5) {
     const dash = MeshBuilder.CreateGround(`dash_${x}`, { width: 2, height: 0.15 }, scene);
     dashes.push(dash);
   }
-  // 合併後只有 1 個 draw call
+  // After merging, only 1 draw call
   Mesh.MergeMeshes(dashes, true, true);
 }
-// ✅ 不觸發 no-raw-mesh-in-loop（validator 偵測到 MergeMeshes 會豁免）
+// Does not trigger no-raw-mesh-in-loop (validator detects MergeMeshes and exempts)
 ```
 
-### 不可用 Thin Instance 時的替代方案
+### Alternatives When Thin Instances Are Not Applicable
 
-當每個 mesh 有不同尺寸（如程序生成建築）無法 thin instance，改用：
-1. **Merge**（靜態 mesh）— 同材質合併為一個 draw call
-2. **LOD**（動態距離）— 遠處換低細節或隱藏
-3. **freezeWorldMatrix()**（靜態位置）— 告知 GPU 不需每幀重算世界矩陣
+When each mesh has different dimensions (e.g. procedurally generated buildings) and thin instances cannot be used, use:
+1. **Merge** (static meshes) — combine same-material meshes into a single draw call
+2. **LOD** (dynamic distance) — swap to lower detail or hide at distance
+3. **freezeWorldMatrix()** (static position) — tell the GPU not to recalculate the world matrix every frame
 
 ```typescript
-// 靜態世界物件全部 freeze
+// Freeze all static world objects
 for (const mesh of worldMeshes) {
-  mesh.freezeWorldMatrix();  // ✅ 建築/地形必做
+  mesh.freezeWorldMatrix();  // Required for buildings/terrain
 }
 ```
 
 ---
 
-## Blender Headless 3D 資產產線
+## Blender Headless 3D Asset Pipeline
 
-> blender-dev 子 agent 專用。建模前必讀本節 + `memory/references/blender-modeling.md`（進階參考）。
+> For the blender-dev sub-agent. Read this section + `memory/references/blender-modeling.md` (advanced reference) before modeling.
 
-### 基礎設定 — Headless Script 模板
+### Basic Setup — Headless Script Template
 
-每個 Blender 腳本都必須遵循這個結構：
+Every Blender script must follow this structure:
 
 ```python
 #!/usr/bin/env python3
-"""[物件名稱] — Blender headless 建模腳本"""
+"""[Object Name] — Blender headless modeling script"""
 import bpy
 import bmesh
 import math
@@ -770,17 +770,17 @@ import sys
 import os
 from mathutils import Vector, Matrix
 
-# ── 1. 清空場景 ──
+# -- 1. Clear scene --
 bpy.ops.wm.read_factory_settings(use_empty=True)
 
-# ── 2. 輸出路徑（從命令列或硬編碼） ──
+# -- 2. Output path (from command line or hardcoded) --
 OUTPUT_DIR = sys.argv[sys.argv.index("--") + 1] if "--" in sys.argv else "/tmp"
 MODEL_NAME = "my_model"
 
-# ── 3. 建模（見下方模式） ──
-# ... bmesh / bpy.ops 建模 ...
+# -- 3. Modeling (see patterns below) --
+# ... bmesh / bpy.ops modeling ...
 
-# ── 4. 材質（PBR — Principled BSDF） ──
+# -- 4. Material (PBR — Principled BSDF) --
 mat = bpy.data.materials.new(name=f"{MODEL_NAME}_mat")
 mat.use_nodes = True
 bsdf = mat.node_tree.nodes["Principled BSDF"]
@@ -789,12 +789,12 @@ bsdf.inputs["Roughness"].default_value = 0.7
 bsdf.inputs["Metallic"].default_value = 0.0
 obj.data.materials.append(mat)
 
-# ── 5. Apply transforms（匯出前必做） ──
+# -- 5. Apply transforms (required before export) --
 bpy.context.view_layer.objects.active = obj
 obj.select_set(True)
 bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
 
-# ── 6. 匯出 GLB ──
+# -- 6. Export GLB --
 glb_path = os.path.join(OUTPUT_DIR, f"{MODEL_NAME}.glb")
 bpy.ops.export_scene.gltf(
     filepath=glb_path,
@@ -806,21 +806,21 @@ bpy.ops.export_scene.gltf(
     export_colors=True,
     check_existing=False,
 )
-print(f"✅ Exported: {glb_path}")
+print(f"Exported: {glb_path}")
 
-# ── 7. Bounding box（讓 producer 知道尺寸） ──
+# -- 7. Bounding box (lets the producer know the dimensions) --
 bbox = [obj.matrix_world @ Vector(corner) for corner in obj.bound_box]
 dims = obj.dimensions
-print(f"📐 Dimensions: {dims.x:.2f} x {dims.y:.2f} x {dims.z:.2f} m")
-print(f"📊 Faces: {len(obj.data.polygons)}")
+print(f"Dimensions: {dims.x:.2f} x {dims.y:.2f} x {dims.z:.2f} m")
+print(f"Faces: {len(obj.data.polygons)}")
 
-# ── 8. 預覽渲染（3 角度） ──
+# -- 8. Preview renders (3 angles) --
 cam_data = bpy.data.cameras.new("QA_Cam")
 cam_obj = bpy.data.objects.new("QA_Cam", cam_data)
 bpy.context.collection.objects.link(cam_obj)
 bpy.context.scene.camera = cam_obj
 
-# 簡易光源
+# Simple light source
 bpy.ops.object.light_add(type='SUN', location=(5, -5, 10))
 bpy.context.object.data.energy = 3.0
 
@@ -840,51 +840,51 @@ for label, loc, rot in angles:
     cam_obj.rotation_euler = rot
     bpy.context.scene.render.filepath = os.path.join(OUTPUT_DIR, f"{MODEL_NAME}_{label}.png")
     bpy.ops.render.render(write_still=True)
-    print(f"📸 Rendered: {MODEL_NAME}_{label}.png")
+    print(f"Rendered: {MODEL_NAME}_{label}.png")
 ```
 
-**執行指令：**
+**Run command:**
 ```bash
 blender --background --python script.py -- /home/wake/dusk-games/{slug}/public/assets/models/
 ```
 
-### 看圖建模工作流程 — Image-to-Blender Pipeline
+### Image-to-Blender Modeling Workflow — Image-to-Blender Pipeline
 
-Agent 拿到參考圖（設計稿、截圖、Gemini 生成圖）後的標準流程：
+Standard workflow after the agent receives a reference image (design mockup, screenshot, Gemini-generated image):
 
 ```
-參考圖 → 分析形狀 → 分解為基本幾何體 → bmesh 組裝 → 材質匹配 → 匯出 GLB
+Reference image → Analyze shapes → Decompose into primitives → bmesh assembly → Material matching → Export GLB
 ```
 
-#### 第 1 步：分析參考圖（由 producer 或 blender-dev 執行）
+#### Step 1: Analyze the reference image (performed by producer or blender-dev)
 
-看到參考圖時，必須提取以下資訊再開始建模：
+When viewing a reference image, extract the following information before starting to model:
 
-| 分析項目 | 輸出 | 範例 |
+| Analysis item | Output | Example |
 |----------|------|------|
-| **輪廓分解** | 基本幾何體清單 | 身體=圓柱、頭=球、手臂=細圓柱 |
-| **比例估算** | 各部件相對尺寸 | 頭:身體 = 1:2.5，手臂長度 = 身體 0.8x |
-| **色彩萃取** | hex 色碼清單 | 主色 #D70F64, 次色 #333333, 亮色 #FFFFFF |
-| **面數預算** | 根據物件類型決定 | 角色 5K-8K, 道具 500-2K（見 blender-modeling.md） |
-| **對稱性** | 是否可用 mirror | 角色：左右對稱，建築：不對稱 |
+| **Silhouette decomposition** | List of primitives | Body=cylinder, head=sphere, arms=thin cylinders |
+| **Proportion estimation** | Relative sizes of parts | Head:body = 1:2.5, arm length = body 0.8x |
+| **Color extraction** | List of hex color codes | Primary #D70F64, secondary #333333, accent #FFFFFF |
+| **Face count budget** | Based on object type | Character 5K-8K, prop 500-2K (see blender-modeling.md) |
+| **Symmetry** | Whether mirror can be used | Character: left-right symmetric, building: asymmetric |
 
-#### 第 2 步：幾何體分解策略
+#### Step 2: Geometry decomposition strategy
 
 ```
-簡單物件（路燈、桶子）     → 2-3 個 primitive 組合
-中型物件（機車、攤位）     → 5-10 個 primitive + extrude
-複雜物件（建築、角色）     → bmesh 程序化 + modifier
-有機物件（樹木、岩石）     → ico sphere + displacement 或手動頂點
+Simple objects (lamp post, barrel)     → 2-3 primitive combinations
+Medium objects (motorcycle, stall)     → 5-10 primitives + extrude
+Complex objects (building, character)  → bmesh procedural + modifier
+Organic objects (trees, rocks)         → ico sphere + displacement or manual vertices
 ```
 
-**原則：從最大的形狀開始，逐步加細節，達到面數預算就停。**
+**Principle: Start from the largest shapes, add detail progressively, stop when the face count budget is reached.**
 
-#### 第 3 步：色彩匹配
+#### Step 3: Color matching
 
-從參考圖萃取色彩後，轉為 Blender 線性色彩空間：
+After extracting colors from the reference image, convert to Blender linear color space:
 
 ```python
-# sRGB hex → Blender 線性（近似轉換）
+# sRGB hex → Blender linear (approximate conversion)
 def hex_to_linear(hex_str):
     """Convert hex color to Blender linear RGB tuple."""
     hex_str = hex_str.lstrip('#')
@@ -892,58 +892,58 @@ def hex_to_linear(hex_str):
     # sRGB to linear approximation
     return tuple(c ** 2.2 for c in (r, g, b))
 
-# 用法
+# Usage
 color = hex_to_linear("#D70F64")
 bsdf.inputs["Base Color"].default_value = (*color, 1.0)
 ```
 
-#### 第 4 步：Texture 材質（需要更多細節時）
+#### Step 4: Texture materials (when more detail is needed)
 
-當純色不夠時，使用 Gemini 生成 tileable texture：
+When solid colors are not enough, use Gemini to generate tileable textures:
 
 ```python
-# Producer 先用 MCP tool 生成材質圖
+# Producer first generates a texture image using MCP tool
 # generate_reference_image("tileable brick wall texture, seamless, 512x512")
-# → 存入 memory/references/brick_wall.png
+# → saved to memory/references/brick_wall.png
 
-# Blender 腳本中載入 texture
+# Load texture in Blender script
 img = bpy.data.images.load("/path/to/brick_wall.png")
 tex_node = mat.node_tree.nodes.new('ShaderNodeTexImage')
 tex_node.image = img
 
-# UV 展開（簡單物件用 Smart UV Project）
+# UV unwrap (use Smart UV Project for simple objects)
 bpy.context.view_layer.objects.active = obj
 bpy.ops.object.mode_set(mode='EDIT')
 bpy.ops.mesh.select_all(action='SELECT')
 bpy.ops.uv.smart_project(angle_limit=66, island_margin=0.02)
 bpy.ops.object.mode_set(mode='OBJECT')
 
-# 連接 texture → Base Color
+# Connect texture → Base Color
 mat.node_tree.links.new(tex_node.outputs["Color"], bsdf.inputs["Base Color"])
 ```
 
-**Texture 解析度規則：**
-- 小道具：256x256
-- 中型物件：512x512
-- 大型建築/地面：1024x1024
-- 永遠不超過 1024x1024（瀏覽器記憶體限制）
+**Texture resolution rules:**
+- Small props: 256x256
+- Medium objects: 512x512
+- Large buildings/ground: 1024x1024
+- Never exceed 1024x1024 (browser memory constraint)
 
-### Blender 常見陷阱
+### Common Blender Pitfalls
 
-| 陷阱 | 症狀 | 解法 |
+| Pitfall | Symptom | Fix |
 |------|------|------|
-| 沒有 `read_factory_settings(use_empty=True)` | 匯出包含預設方塊 | 腳本開頭清場 |
-| 忘記 Apply Transforms | GLB 中物件大小/旋轉錯誤 | 匯出前 `transform_apply()` |
-| Principled BSDF 用 sRGB 值 | 顏色偏亮 | 用 `** 2.2` 轉線性 |
-| 面數超標 | 遊戲卡頓 | 建模時持續 `print(len(obj.data.polygons))` 監控 |
-| `bpy.ops` 依賴 context | headless 模式報錯 | 盡量用 bmesh，或確保 `view_layer.objects.active` 正確 |
-| 多材質 = 多 draw call | GPU 瓶頸 | 用頂點色或合併材質 |
-| 沒渲染預覽 | producer 無法 QA | 每次匯出都渲染 3 個角度 |
+| Missing `read_factory_settings(use_empty=True)` | Export includes default cube | Clear scene at script start |
+| Forgetting Apply Transforms | Incorrect size/rotation in GLB | Call `transform_apply()` before export |
+| Using sRGB values in Principled BSDF | Colors appear too bright | Convert with `** 2.2` to linear |
+| Exceeding face count | Game stutters | Monitor with `print(len(obj.data.polygons))` during modeling |
+| `bpy.ops` depends on context | Errors in headless mode | Use bmesh where possible, or ensure `view_layer.objects.active` is set correctly |
+| Multiple materials = multiple draw calls | GPU bottleneck | Use vertex colors or merge materials |
+| No preview renders | Producer cannot QA | Render 3 angles with every export |
 
-### 進階參考
+### Advanced Reference
 
-完整的 bmesh 操作、面數預算表、動畫骨架、程序化建築模板：
+Full bmesh operations, face count budget tables, animation rigs, procedural building templates:
 → `memory/references/blender-modeling.md`
 
-成功建模的可重用模式（分層記憶索引）：
-→ Dusk 記憶中的「Blender 成功模式索引」區段
+Reusable patterns from successful modeling (layered memory index):
+→ The "Blender Success Patterns Index" section in Dusk memory

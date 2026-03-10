@@ -1,480 +1,480 @@
 # Agent Architecture for Game Development — Human Reference
 
-> 本文件是給**人類**看的。
-> 記錄如何設計 AI agent 系統來開發 Babylon.js 遊戲，基於實際運行數百次覺醒的經驗。
+> This document is intended for **humans**.
+> It records how to design an AI agent system for developing Babylon.js games, based on practical experience from hundreds of awakenings.
 
 ---
 
-## 核心發現：Orchestrator 模式產出更精細的場景
+## Core Finding: Orchestrator Mode Produces More Refined Scenes
 
-我們測試了兩種 agent 架構：
+We tested two agent architectures:
 
-| | Orchestrator 模式 | Direct 模式 |
+| | Orchestrator Mode | Direct Mode |
 |---|---|---|
-| **代表** | midnight（台北戰線） | dusk（Banana Defense） |
-| **agent 能否寫 code** | 禁止 Write/Edit | 可以 |
-| **子 agent** | game-dev, blender-dev, fullstack-dev | game-dev, blender-dev |
-| **產出規模** | 14,825 行, 25 個模組 | 3,395 行, 11 個檔案 |
-| **3D 資產** | 10+ GLB 模型 | 0 GLB（純程序化） |
-| **場景精細度** | 高（多層燈光、環境物件、氛圍） | 中（功能完整但視覺單薄） |
-| **開發週期** | 11 個 phase, ~2 週 | 2 個 phase, ~1 週 |
+| **Representative** | midnight (Taipei Frontline) | dusk (Banana Defense) |
+| **Can agent write code** | Write/Edit forbidden | Yes |
+| **Sub-agents** | game-dev, blender-dev, fullstack-dev | game-dev, blender-dev |
+| **Output scale** | 14,825 lines, 25 modules | 3,395 lines, 11 files |
+| **3D assets** | 10+ GLB models | 0 GLB (purely procedural) |
+| **Scene refinement** | High (multi-layer lighting, environmental objects, atmosphere) | Medium (functionally complete but visually thin) |
+| **Dev cycle** | 11 phases, ~2 weeks | 2 phases, ~1 week |
 
-**結論：** 當 orchestrator 不能自己寫 code 時，它會：
-1. 花更多 turns 在**設計和審核**上
-2. 給子 agent 更**具體的指示**（因為它必須用文字描述想要的效果）
-3. 主動使用**資產管線**（因為它不能用 MeshBuilder 偷懶）
-4. 對結果做更嚴格的 **QA**（因為它只能看，不能改）
-
----
-
-## Agent 角色設計
-
-### Orchestrator（總監）
-
-```
-職責：規劃、決策、審核、溝通
-禁止工具：Write, Edit, NotebookEdit
-允許工具：Read, Bash, Glob, Grep + MCP tools（記憶、報告、資產管理）
-模型：最強模型（如 claude-opus-4-6）
-Turn 預算：100-120 turns
-```
-
-**為什麼禁止寫 code：**
-- 強制使用子 agent，產生可審核的工作邊界
-- 避免 orchestrator 陷入 debug 循環
-- 保持 orchestrator 的注意力在全局設計上
-
-### game-dev（遊戲開發者）
-
-```
-職責：寫 Babylon.js/TypeScript 代碼
-允許工具：Read, Write, Edit, Bash, Glob, Grep
-模型：強模型（claude-opus-4-6 或 claude-sonnet-4-6）
-Turn 預算：由 orchestrator 控制
-```
-
-**Prompt 中必須包含：**
-- 工作目錄路徑
-- scene-compiler SKILL.md 的路徑（要求先讀）
-- Build 指令（驗證代碼是否通過 scene-compiler）
-- 明確的邊界（不能改哪些檔案）
-
-### blender-dev（3D 建模者）
-
-```
-職責：寫 Blender Python 腳本，產出 GLB + 預覽圖
-允許工具：Read, Write, Edit, Bash, Glob, Grep
-模型：強模型
-Turn 預算：由 orchestrator 控制
-```
-
-**Prompt 中必須包含：**
-- blender-modeling 參考文件路徑
-- 輸出目錄路徑
-- 面數預算
-- 必須產出 3 張預覽 + bbox 的要求
+**Conclusion:** When the orchestrator cannot write code itself, it will:
+1. Spend more turns on **design and review**
+2. Give sub-agents more **specific instructions** (because it must describe the desired effect in words)
+3. Actively use the **asset pipeline** (because it cannot take shortcuts with MeshBuilder)
+4. Perform stricter **QA** on results (because it can only observe, not modify)
 
 ---
 
-## 記憶驅動的自適應開發
+## Agent Role Design
 
-**這是最重要的設計模式。**
+### Orchestrator (Director)
 
-Agent 不是按照一個固定計畫執行到底。它每次覺醒時：
-1. 讀取記憶（上次做了什麼、當前里程碑、技術筆記）
-2. 讀取外部輸入（人類訊息、其他 agent 的報告、資產回饋）
-3. **根據當前狀況重新決策**
-4. 執行一個任務
-5. **更新記憶**（不是 append，是 replace — 記憶永遠反映最新狀態）
+```
+Responsibilities: Planning, decision-making, review, communication
+Disallowed tools: Write, Edit, NotebookEdit
+Allowed tools: Read, Bash, Glob, Grep + MCP tools (memory, reports, asset management)
+Model: Strongest model (e.g., claude-opus-4-6)
+Turn budget: 100-120 turns
+```
 
-### 記憶結構設計
+**Why code writing is forbidden:**
+- Forces use of sub-agents, creating auditable work boundaries
+- Prevents the orchestrator from getting stuck in debug loops
+- Keeps the orchestrator's attention on overall design
+
+### game-dev (Game Developer)
+
+```
+Responsibilities: Writing Babylon.js/TypeScript code
+Allowed tools: Read, Write, Edit, Bash, Glob, Grep
+Model: Strong model (claude-opus-4-6 or claude-sonnet-4-6)
+Turn budget: Controlled by orchestrator
+```
+
+**Prompt must include:**
+- Working directory path
+- Path to scene-compiler SKILL.md (require reading it first)
+- Build instructions (verify code passes scene-compiler)
+- Clear boundaries (which files cannot be modified)
+
+### blender-dev (3D Modeler)
+
+```
+Responsibilities: Writing Blender Python scripts, producing GLB + preview images
+Allowed tools: Read, Write, Edit, Bash, Glob, Grep
+Model: Strong model
+Turn budget: Controlled by orchestrator
+```
+
+**Prompt must include:**
+- Path to blender-modeling reference files
+- Output directory path
+- Polygon budget
+- Requirement to produce 3 preview images + bounding box
+
+---
+
+## Memory-Driven Adaptive Development
+
+**This is the most important design pattern.**
+
+The agent does not execute a fixed plan from start to finish. At each awakening it:
+1. Reads memory (what was done last time, current milestone, technical notes)
+2. Reads external inputs (human messages, other agents' reports, asset feedback)
+3. **Re-evaluates decisions based on the current situation**
+4. Executes one task
+5. **Updates memory** (not append, but replace — memory always reflects the latest state)
+
+### Memory Structure Design
 
 ```markdown
-## 北極星
-一句話描述最終目標（永遠不變）
+## North Star
+One sentence describing the ultimate goal (never changes)
 
-### 階段里程碑
-1. 核心玩法原型 ✅
-2. 射擊系統 ✅
-3. 多人連線 ✅
-4. 場景豐富化 ← 當前
-5. 打磨 & QA
+### Phase Milestones
+1. Core gameplay prototype ✅
+2. Shooting system ✅
+3. Multiplayer networking ✅
+4. Scene enrichment ← current
+5. Polish & QA
 
-## 當前狀態
-- 版本：v0.8.0
-- 最近完成：路燈 + 街樹放置
-- 下一步：機車群聚放置
-- 已知問題：路口碰撞牆需要開口
+## Current State
+- Version: v0.8.0
+- Recently completed: Street lamp + street tree placement
+- Next step: Motorcycle cluster placement
+- Known issues: Intersection collision walls need openings
 
-## 技術筆記
-- freezeWorldMatrix 後用 setEnabled() 不用 scaling
-- 多關卡 return early 不 removeCallback
-- （只記有用的教訓，不記流水帳）
+## Technical Notes
+- After freezeWorldMatrix, use setEnabled() instead of scaling
+- Multi-level return early, don't removeCallback
+- (Only record useful lessons, not play-by-play logs)
 
-## 已完成資產
-- name (id): 狀態
+## Completed Assets
+- name (id): status
 ```
 
-### 為什麼用 replace 而非 append
+### Why Replace Instead of Append
 
-Append 模式會導致記憶無限膨脹，早期的過時資訊干擾決策。
-Replace 模式強制 agent 每次覺醒時**整理和濃縮**記憶，只保留當前相關的資訊。
+Append mode causes memory to grow unboundedly, with outdated early information interfering with decisions.
+Replace mode forces the agent to **organize and condense** memory at each awakening, keeping only currently relevant information.
 
 ```python
-# 覺醒結束時
-write_memory_tool(replace=true)  # 不是 append！
+# At the end of an awakening
+write_memory_tool(replace=true)  # Not append!
 ```
 
-### 自適應決策流程
+### Adaptive Decision Flow
 
 ```
-讀取記憶
+Read memory
   ↓
-掃描外部輸入：
-  人類訊息？→ 最高優先級，立即處理
-  資產回饋？→ 高優先級，修正資產
-  已完成資產？→ 整合進遊戲
-  其他 agent 報告？→ 參考但不干涉
+Scan external inputs:
+  Human message? → Highest priority, handle immediately
+  Asset feedback? → High priority, fix asset
+  Completed assets? → Integrate into game
+  Other agent reports? → Reference but don't interfere
   ↓
-（以上都沒有）
+(None of the above)
   ↓
-根據里程碑進度選擇下一個任務
+Choose next task based on milestone progress
   ↓
-宣告「本次覺醒專注於：[任務]」
+Declare "This awakening focuses on: [task]"
   ↓
-執行
+Execute
   ↓
-更新記憶（replace）
+Update memory (replace)
 ```
 
-**關鍵：** Agent 的計畫（里程碑列表）會隨著開發過程演化。
-Phase 3 可能原本計畫做「外送系統」，但實際跑起來發現玩法更適合波次生存，就把外送標記為「暫停」並調整方向。
-這不是 bug，這是設計——**記憶是活的文件，不是死的計畫。**
+**Key point:** The agent's plan (milestone list) evolves throughout development.
+Phase 3 may have originally planned for a "delivery system," but after running it, the gameplay turned out to be better suited for wave survival, so delivery gets marked as "paused" and the direction adjusts.
+This is not a bug — this is by design. **Memory is a living document, not a dead plan.**
 
 ---
 
-## 單任務專注模式
+## Single-Task Focus Mode
 
-每次覺醒只做**一個任務**，做完做好。
+Each awakening handles only **one task**, done well and done completely.
 
-**為什麼不做多任務：**
-- Agent context window 有限，多任務會導致每個任務都做得淺
-- 單任務更容易 QA — 如果 build 壞了，肯定是這個任務造成的
-- 覺醒報告更清晰 — 「本次完成了 X」比「本次推進了 X, Y, Z 各 30%」更有用
-- 人類更容易追蹤進度
+**Why not multitask:**
+- Agent context windows are limited; multitasking leads to shallow work on each task
+- Single tasks are easier to QA — if the build breaks, it was definitely caused by this task
+- Awakening reports are clearer — "Completed X this time" is more useful than "Advanced X, Y, Z each by 30%"
+- Easier for humans to track progress
 
-**任務粒度範例：**
-- ✅ 好的粒度：「實作 5 關卡推進系統」
-- ✅ 好的粒度：「整合 3 個已完成資產到場景中」
-- ❌ 太大：「完成 Phase 7」
-- ❌ 太小：「修改一行 CSS」
+**Task granularity examples:**
+- ✅ Good granularity: "Implement 5-level progression system"
+- ✅ Good granularity: "Integrate 3 completed assets into the scene"
+- ❌ Too large: "Complete Phase 7"
+- ❌ Too small: "Modify one line of CSS"
 
 ---
 
-## 覺醒排程設計
+## Awakening Scheduling Design
 
-### 決定覺醒頻率的因素
+### Factors That Determine Awakening Frequency
 
-| 因素 | 高頻率（每 2h） | 低頻率（每 12h） |
+| Factor | High frequency (every 2h) | Low frequency (every 12h) |
 |------|---------------|----------------|
-| 開發速度 | 快速迭代 | 深思熟慮 |
-| Token 成本 | 高 | 低 |
-| 適合誰 | 主要開發者（midnight） | 內容產出者（dawn） |
-| 適合什麼 | 遊戲功能開發 | 部落格寫作 |
+| Development speed | Rapid iteration | Deliberate thinking |
+| Token cost | High | Low |
+| Suited for whom | Primary developer (midnight) | Content producer (dawn) |
+| Suited for what | Game feature development | Blog writing |
 
-### 空轉保護
+### Idle Protection
 
-Agent 沒事做時不應該浪費 token 做「健康檢查」。在 supervisor 加檢查：
+When the agent has nothing to do, it should not waste tokens on "health checks." Add checks in the supervisor:
 
 ```python
-# 如果遊戲在等待人類審核 且 沒有人類訊息 → 跳過
+# If the game is awaiting human review AND no human messages → skip
 if pending_review and not messages and not assets and not feedbacks:
     return {"status": "skipped", "reason": "pending_review"}
 
-# 如果沒有覺醒報告 且 沒有訊息 → 跳過（適用於 dawn 等讀報告的 agent）
+# If no awakening reports AND no messages → skip (applies to agents like dawn that read reports)
 if not reports and not messages:
     return {"status": "skipped", "reason": "no_reports"}
 ```
 
 ---
 
-## Agent 間通訊
+## Inter-Agent Communication
 
-### 合作模式
+### Cooperation Mode
 
-Agent 可透過 message 系統互相溝通：
+Agents can communicate with each other through the message system:
 
 ```python
-send_message_to_agent("dusk", "幫手召喚系統設計規格已寫入 design doc，請讀取")
+send_message_to_agent("dusk", "Helper summoning system design spec has been written to the design doc, please read it")
 ```
 
-**風險：** Agent 會自發協作（看到對方的訊息後主動幫忙）。
-如果不希望 agent 跨界，需要在 prompt 中明確限制：
+**Risk:** Agents may spontaneously collaborate (proactively helping after seeing another's messages).
+If you don't want agents to cross boundaries, explicitly restrict this in the prompt:
 
 ```markdown
-## 邊界
-- 你只負責 /home/wake/runner-game/ 的開發
-- 不要修改其他 agent 的遊戲專案
-- 不要主動幫其他 agent 做事
+## Boundaries
+- You are only responsible for development in /home/wake/runner-game/
+- Do not modify other agents' game projects
+- Do not proactively do work for other agents
 ```
 
-### 報告可見性
+### Report Visibility
 
-`get_recent_reports_tool()` 返回**所有 agent** 的報告。
-如果需要隔離，在 MCP tool 層面過濾：
+`get_recent_reports_tool()` returns reports from **all agents**.
+If isolation is needed, filter at the MCP tool level:
 
 ```python
-# 只返回自己的報告
+# Only return your own reports
 reports = [r for r in all_reports if r["agent"] == AGENT_NAME]
 ```
 
 ---
 
-## Phase 規劃建議
+## Phase Planning Recommendations
 
-基於台北戰線的 11 phase 經驗，建議的 phase 結構：
+Based on the 11-phase experience from Taipei Frontline, here is the recommended phase structure:
 
-### 前期（功能導向）
-1. **核心玩法原型** — 最小可玩版本，驗證基本機制
-2. **核心機制完善** — 補齊缺失的遊戲機制
-3. **世界骨架** — 道路、建築、基本場景
+### Early Stages (Feature-Oriented)
+1. **Core gameplay prototype** — Minimum playable version, validate basic mechanics
+2. **Core mechanics refinement** — Fill in missing game mechanics
+3. **World skeleton** — Roads, buildings, basic scene
 
-### 中期（內容導向）
-4. **資產管線啟動** — 提案 + 建模 + 整合第一批 GLB
-5. **遊戲深度** — 敵人種類、武器、技能樹
-6. **多人連線**（如需要）— 網路同步、房間系統
+### Middle Stages (Content-Oriented)
+4. **Asset pipeline launch** — Proposal + modeling + integrating first batch of GLBs
+5. **Game depth** — Enemy types, weapons, skill trees
+6. **Multiplayer networking** (if needed) — Network sync, room system
 
-### 後期（打磨導向）
-7. **環境豐富化** — 路燈、樹木、招牌、停放車輛（Level 3 精細度）
-8. **氛圍系統** — 多層燈光、霧、GlowLayer、音效（Level 4 精細度）
-9. **互動回饋** — HUD 疊加、破壞系統、連鎖效果（Level 5 精細度）
-10. **UX 打磨** — 載入畫面、暫停、設定、教學提示
-11. **QA & 修 bug** — 最終驗收
+### Late Stages (Polish-Oriented)
+7. **Environment enrichment** — Street lamps, trees, signs, parked vehicles (Level 3 refinement)
+8. **Atmosphere system** — Multi-layer lighting, fog, GlowLayer, sound effects (Level 4 refinement)
+9. **Interactive feedback** — HUD overlays, destruction system, chain effects (Level 5 refinement)
+10. **UX polish** — Loading screens, pause, settings, tutorial prompts
+11. **QA & bug fixes** — Final acceptance
 
-**關鍵：Phase 7-8 是大多數遊戲跳過的，但它們是精細度的核心。**
-在規劃時明確加入「環境豐富化」和「氛圍系統」phase，不要讓它們被功能開發擠掉。
+**Key point: Phases 7-8 are what most games skip, but they are the core of refinement.**
+When planning, explicitly include "environment enrichment" and "atmosphere system" phases — don't let them get squeezed out by feature development.
 
 ---
 
-## 實際 Orchestrator Prompt 範本
+## Practical Orchestrator Prompt Template
 
 ```markdown
-# {agent_name} — 遊戲總監
+# {agent_name} — Game Director
 
-你是 **{agent_name}**，{game_name} 的遊戲總監。
+You are **{agent_name}**, the game director for {game_name}.
 
-## 核心身份
-- 你是**設計者和審核者**，不是開發者。你不寫遊戲代碼。
-- 你透過子 agent 執行工作：game-dev（寫代碼）、blender-dev（建模）。
-- 你的職責：規劃任務、審核結果、管理資產管線、維護品質。
+## Core Identity
+- You are a **designer and reviewer**, not a developer. You do not write game code.
+- You execute work through sub-agents: game-dev (writes code), blender-dev (creates models).
+- Your responsibilities: Plan tasks, review results, manage the asset pipeline, maintain quality.
 
-## 覺醒工作流程
-1. `read_memory_tool()` — 讀取記憶（北極星、里程碑、進度、技術筆記）
-2. 檢查外部輸入（人類訊息 > 資產回饋 > 已完成資產 > 開發任務）
-3. 宣告「本次覺醒專注於：[一個任務]」
-4. 透過子 agent 執行任務
-5. 驗證結果（build / 預覽檢查）
-6. `write_awakening_report_tool()` — 繳交覺醒報告
-7. `write_memory_tool(replace=true)` — 更新記憶
+## Awakening Workflow
+1. `read_memory_tool()` — Read memory (North Star, milestones, progress, technical notes)
+2. Check external inputs (human messages > asset feedback > completed assets > development tasks)
+3. Declare "This awakening focuses on: [one task]"
+4. Execute the task through sub-agents
+5. Verify results (build / preview check)
+6. `write_awakening_report_tool()` — Submit awakening report
+7. `write_memory_tool(replace=true)` — Update memory
 
-## 資產管線（強制）
-- 場景中的 3D 物件**必須**使用 GLB 資產，不可用 MeshBuilder 代替
-- 資產流程：propose → reference → blender-dev → QA → integrate
-- 每次覺醒最多提案 3 個資產
-- 整合前必須 QA 審核（對比參考圖 + 尺寸檢查）
+## Asset Pipeline (Mandatory)
+- 3D objects in the scene **must** use GLB assets; MeshBuilder substitutes are not allowed
+- Asset flow: propose → reference → blender-dev → QA → integrate
+- Maximum 3 asset proposals per awakening
+- QA review required before integration (compare reference images + size check)
 
-## 記憶管理
-- 覺醒結束前**必須** `write_memory_tool(replace=true)` 更新記憶
-- 記憶格式：北極星 + 里程碑列表 + 當前狀態 + 技術筆記 + 已完成資產
-- 里程碑可以根據實際進展調整（標記暫停、新增、重排序）
-- 技術筆記只記有用的教訓，不記流水帳
+## Memory Management
+- **Must** run `write_memory_tool(replace=true)` to update memory before the awakening ends
+- Memory format: North Star + milestone list + current state + technical notes + completed assets
+- Milestones can be adjusted based on actual progress (mark as paused, add new ones, reorder)
+- Technical notes should only record useful lessons, not play-by-play logs
 
-## 限制
-- **禁止** Write, Edit, NotebookEdit（你是 orchestrator）
-- 每次覺醒只做**一個**任務
-- 子 agent 寫的代碼必須通過 scene-compiler build
+## Constraints
+- **Forbidden:** Write, Edit, NotebookEdit (you are the orchestrator)
+- Only **one** task per awakening
+- Code written by sub-agents must pass the scene-compiler build
 ```
 
 ---
 
-## 架構選型：Prompt-guided vs Memory-guided
+## Architecture Choice: Prompt-Guided vs Memory-Guided
 
-這是設計 agent 系統的**第一個決策**。選錯了會影響整個專案的規模和品質。
+This is the **first decision** when designing an agent system. Getting it wrong will affect the entire project's scale and quality.
 
-### 兩種模式
+### Two Modes
 
-| | Prompt-guided（北極星在 prompt） | Memory-guided（北極星在記憶） |
+| | Prompt-guided (North Star in prompt) | Memory-guided (North Star in memory) |
 |---|---|---|
-| **Prompt 內容** | 遊戲類型、美術風格、攝影機架構、子 agent 職責、資產管線、技術參考索引 | 通用的 orchestrator 流程、子 agent 用法 |
-| **記憶內容** | 里程碑進度、技術筆記、已完成資產 | **整份設計文件** + 進度 + 技術筆記 |
-| **不變的部分** | 「Co-op TPS、台灣街景、越肩視角、正面品質 > 屋頂」 | 幾乎只有「你是管理者」 |
-| **會變的部分** | 當前 Phase、做到哪裡 | 在做什麼遊戲、設計方向、進度 |
+| **Prompt content** | Game type, art style, camera architecture, sub-agent responsibilities, asset pipeline, technical reference index | Generic orchestrator workflow, sub-agent usage |
+| **Memory content** | Milestone progress, technical notes, completed assets | **Entire design document** + progress + technical notes |
+| **Immutable parts** | "Co-op TPS, Taiwan streetscape, over-the-shoulder view, front-facing quality > rooftops" | Almost only "you are a manager" |
+| **Mutable parts** | Current phase, progress | What game is being built, design direction, progress |
 
-### 為什麼這決定了專案規模
+### Why This Determines Project Scale
 
-**Prompt 是每次覺醒都會讀到的** — agent 無法忘記它、無法修改它、無法跳過它。
+**The prompt is read at every awakening** — the agent cannot forget it, modify it, or skip it.
 
-Prompt-guided agent 的 prompt 寫死了技術約束（攝影機架構、材質管線、QA 流程、職責劃分）。這些是**護欄**。不管記憶怎麼變、里程碑怎麼調整，agent 永遠不會：
-- 用 MeshBuilder 偷懶（因為 prompt 強制資產管線）
-- 跳過 QA（因為 prompt 寫了「嚴格 — 不可跳步」）
-- 把射擊邏輯丟給錯的子 agent（因為 prompt 寫了職責劃分）
+A prompt-guided agent's prompt hardcodes technical constraints (camera architecture, material pipeline, QA workflow, role division). These are **guardrails**. No matter how memory changes or milestones shift, the agent will never:
+- Take shortcuts with MeshBuilder (because the prompt enforces the asset pipeline)
+- Skip QA (because the prompt says "strict — no skipping steps")
+- Assign shooting logic to the wrong sub-agent (because the prompt defines role division)
 
-Memory-guided agent 的設計文件在記憶裡，agent 可以修改它。靈活但也危險 — agent 可能在某次覺醒中「優化」設計文件，無意間改掉重要的技術約束。
+A memory-guided agent's design document lives in memory, which the agent can modify. Flexible but also risky — the agent might "optimize" the design document during an awakening and inadvertently alter important technical constraints.
 
-### 累積效應
+### Cumulative Effect
 
-這是真正的差異。
+This is the real difference.
 
-Prompt-guided agent 做了 11 個 Phase，每個 Phase 的成果**疊加**在前一個上。因為攝影機架構、材質管線從第一天就固定，Phase 11 的載入畫面和 Phase 1 的核心玩法用的是同一套技術基礎。技術債務低，成果可累積。
+A prompt-guided agent completed 11 phases, with each phase's results **building upon** the previous one. Because the camera architecture and material pipeline were fixed from day one, Phase 11's loading screen and Phase 1's core gameplay use the same technical foundation. Technical debt is low, and results accumulate.
 
-Memory-guided agent 做 11 個 Phase，中途可能因為記憶被修改，導致 Phase 6 的技術決策和 Phase 1 不一致。
+A memory-guided agent doing 11 phases might, due to memory modifications mid-way, end up with Phase 6 technical decisions inconsistent with Phase 1.
 
-### 選型指南
+### Selection Guide
 
-| 選擇 | 條件 |
+| Choice | Conditions |
 |------|------|
-| **Prompt-guided** | 方向明確、長期開發（> 5 phases）、需要資產管線、多人連線等複雜系統 |
-| **Memory-guided** | 需要探索、短期開發（< 5 phases）、專案會切換、方向未定 |
+| **Prompt-guided** | Clear direction, long-term development (> 5 phases), needs asset pipeline, multiplayer networking, or other complex systems |
+| **Memory-guided** | Needs exploration, short-term development (< 5 phases), project may switch, direction undecided |
 
-### 混合策略
+### Hybrid Strategy
 
-也可以混合：用 prompt 固定**技術約束**（攝影機、材質管線、QA 流程），用記憶存**設計方向**（遊戲主題、關卡設計、角色設定）。這樣技術基礎穩定，但創意方向靈活。
+You can also mix approaches: use the prompt to lock down **technical constraints** (camera, material pipeline, QA workflow), and use memory to store **design direction** (game theme, level design, character settings). This keeps the technical foundation stable while allowing creative direction to remain flexible.
 
 ```markdown
-# Prompt 中（不變）
-- 你是 orchestrator，禁止 Write/Edit
-- 攝影機架構：[具體技術規格]
-- 資產管線：propose → blender → QA → integrate
-- Build 驗證：scene-compiler validate + vite build
+# In the prompt (immutable)
+- You are the orchestrator, Write/Edit forbidden
+- Camera architecture: [specific technical specs]
+- Asset pipeline: propose → blender → QA → integrate
+- Build verification: scene-compiler validate + vite build
 
-# 記憶中（可變）
-## 當前遊戲設計
-- 主題：[可調整]
-- 關卡設計：[可調整]
-- 角色設定：[可調整]
+# In memory (mutable)
+## Current Game Design
+- Theme: [adjustable]
+- Level design: [adjustable]
+- Character settings: [adjustable]
 ```
 
 ---
 
-## Prompt 設計模式
+## Prompt Design Patterns
 
-以下是從實際運行的 orchestrator prompt 中提煉的設計模式。
+The following are design patterns distilled from actually running orchestrator prompts.
 
-### Turn 預算分配
+### Turn Budget Allocation
 
-不要只給 agent 一個總 turn 數——**按階段分配**，強制時間管理：
+Don't just give the agent a total turn count — **allocate by phase** to enforce time management:
 
 ```markdown
-## 覺醒工作流程
+## Awakening Workflow
 
-每次覺醒你有 **60 turns 預算**：
+Each awakening you have a **60-turn budget**:
 
-### 第一階段：狀況評估（5 turns）
+### Phase 1: Situation Assessment (5 turns)
 1. read_memory_tool()
-2. 檢查人類訊息
-3. 掃描遊戲 source code
+2. Check human messages
+3. Scan game source code
 
-### 第二階段：選擇唯一任務（3 turns）
-選擇一個任務，宣告「本次覺醒專注於：[任務]」
+### Phase 2: Choose a Single Task (3 turns)
+Choose one task, declare "This awakening focuses on: [task]"
 
-### 第三階段：執行（40 turns）
-透過子 agent 執行
+### Phase 3: Execution (40 turns)
+Execute through sub-agents
 
-### 第四階段：收尾（10 turns）
-Build 驗證 + 覺醒報告 + 記憶更新
+### Phase 4: Wrap-up (10 turns)
+Build verification + awakening report + memory update
 ```
 
-**為什麼有效：** Agent 不會花 30 turns 「評估狀況」然後只剩 10 turns 做事。
+**Why this works:** The agent won't spend 30 turns "assessing the situation" and then have only 10 turns left to do actual work.
 
-### 自主決策 + 決策紀錄
+### Autonomous Decision-Making + Decision Logging
 
 ```markdown
-**自主執行原則：不需要問人類意見，直接朝北極星前進。**
-遇到決策點時，自行判斷最佳方案執行，在覺醒報告中記錄決策理由。
-人類的意見會透過訊息送達，收到後優先處理即可。
+**Autonomous execution principle: Do not ask for human input; proceed directly toward the North Star.**
+When encountering decision points, make your own judgment on the best approach, and record the reasoning in the awakening report.
+Human input will arrive via messages; when received, handle it with priority.
 ```
 
-**為什麼有效：** Agent 不會卡在「要不要問人類」的猶豫中。
-人類透過非同步訊息參與，agent 透過報告記錄為什麼這樣決定——雙方都有完整資訊。
+**Why this works:** The agent won't get stuck hesitating about "should I ask the human."
+Humans participate through asynchronous messages, and the agent records its reasoning in reports — both sides have complete information.
 
-### Build 失敗的有限重試
+### Limited Retries on Build Failure
 
 ```markdown
-1. Build 驗證
-   - **Build 成功** → 繼續收尾
-   - **Build 失敗** → 啟動 game-dev 修復，再跑一次（最多重試 2 次）
-   - 修不好的話在覺醒報告中記錄，下次覺醒優先處理
+1. Build verification
+   - **Build succeeds** → Continue to wrap-up
+   - **Build fails** → Launch game-dev to fix, run again (maximum 2 retries)
+   - If it can't be fixed, record it in the awakening report and prioritize it next awakening
 ```
 
-**為什麼有效：** 防止 agent 陷入 build → fail → fix → fail 的死循環消耗所有 turns。
-2 次重試是經驗值——大多數 build 錯誤 1-2 次就能修好，修不好的通常需要更大的設計變更。
+**Why this works:** Prevents the agent from falling into a build → fail → fix → fail death spiral that consumes all turns.
+2 retries is an empirical value — most build errors can be fixed in 1-2 attempts; those that can't usually require a larger design change.
 
-### 按 Phase 讀參考文件
+### Read Reference Files by Phase
 
-不要讓 agent 一次讀完所有參考文件——按當前需要讀。
+Don't have the agent read all reference files at once — read them as currently needed.
 
 ```markdown
-## 技術參考文件（按需讀取）
+## Technical Reference Files (Read on Demand)
 
-| 文件 | 何時讀 |
+| File | When to Read |
 |------|--------|
-| TPS 戰鬥系統 | **Phase 1**：射擊、動畫混合、破壞 |
-| 多人連線 | **Phase 2**：WebSocket、狀態同步 |
-| NPC 尋路 | **Phase 3**：敵人 AI、NavMesh |
-| 光照系統 | **Phase 7**：光源、陰影、霓虹 |
+| TPS combat system | **Phase 1**: Shooting, animation blending, destruction |
+| Multiplayer networking | **Phase 2**: WebSocket, state synchronization |
+| NPC pathfinding | **Phase 3**: Enemy AI, NavMesh |
+| Lighting system | **Phase 7**: Light sources, shadows, neon |
 
-**原則：依 Phase 需要讀取 — 不需要一次全讀。**
+**Principle: Read as needed per phase — no need to read everything at once.**
 ```
 
-**為什麼有效：** 節省 context window。一個 500 行的參考文件在不需要時讀進去，會擠壓 agent 做其他事情的空間。
+**Why this works:** Saves context window space. A 500-line reference file read in when not needed takes up space that could be used for the agent to do other work.
 
-### 分層記憶（適用於有大量可重用經驗的 agent）
+### Layered Memory (For Agents with Extensive Reusable Experience)
 
-當 agent 累積的經驗太多放不進一份記憶檔案時，用**索引 + 詳細檔案**的兩層結構：
+When an agent has accumulated too much experience to fit in a single memory file, use a **two-tier structure of index + detailed files**:
 
 ```markdown
-## Blender 成功模式索引（上限 20 條）
+## Blender Success Pattern Index (limit 20 entries)
 
-格式：`- {名稱}｜{手法關鍵字}｜{面數}｜→ memory/references/blender-scripts/{filename}.md`
+Format: `- {name}｜{technique keywords}｜{polygon count}｜→ memory/references/blender-scripts/{filename}.md`
 
-- 台灣騎樓公寓｜bmesh extrude + array｜5K faces｜→ blender-scripts/taiwan-apartment.md
-- 路燈｜cylinder + torus + emission｜800 faces｜→ blender-scripts/street-lamp.md
+- Taiwan arcade apartment｜bmesh extrude + array｜5K faces｜→ blender-scripts/taiwan-apartment.md
+- Street lamp｜cylinder + torus + emission｜800 faces｜→ blender-scripts/street-lamp.md
 ```
 
-**使用規則：**
-1. 建模前先查索引，有相似物件就讓子 agent 讀詳細檔案
-2. 成功建模後寫入詳細檔案 + 更新索引
-3. 索引滿 20 條時淘汰最不通用的（特殊造型優先淘汰，通用模式優先保留）
+**Usage rules:**
+1. Before modeling, check the index first; if a similar object exists, have the sub-agent read the detailed file
+2. After successful modeling, write a detailed file + update the index
+3. When the index reaches 20 entries, retire the least versatile ones (specialized shapes are retired first, general-purpose patterns are kept)
 
-**為什麼有效：** 記憶不膨脹（索引只有 20 行），但經驗不丟失（詳細檔案隨時可讀）。
+**Why this works:** Memory doesn't bloat (the index is only 20 lines), but experience isn't lost (detailed files can be read anytime).
 
-### 設計文件的放置：Prompt vs 記憶
+### Design Document Placement: Prompt vs Memory
 
-兩種策略都可行：
+Both strategies are viable:
 
-| 策略 | 適用場景 | 優點 | 缺點 |
+| Strategy | Use Case | Pros | Cons |
 |------|---------|------|------|
-| **設計文件在 prompt 裡** | 專案固定、方向不變 | 每次覺醒一定會讀到 | 佔 prompt 空間 |
-| **設計文件在記憶裡** | 專案會變、方向會調整 | agent 可以隨時修改 | agent 可能不讀 |
+| **Design doc in prompt** | Fixed project, unchanging direction | Guaranteed to be read every awakening | Takes up prompt space |
+| **Design doc in memory** | Project may change, direction may shift | Agent can modify anytime | Agent might not read it |
 
-Midnight 用的是 **prompt 策略**（TPS 遊戲方向固定，prompt 裡寫死「Co-op TPS, 台灣街景」）。
-Dusk 用的是 **記憶策略**（遊戲工廠，每個專案不同，設計文件存在記憶裡隨專案變化）。
+Midnight uses the **prompt strategy** (TPS game direction is fixed; prompt hardcodes "Co-op TPS, Taiwan streetscape").
+Dusk uses the **memory strategy** (game factory; each project is different; design docs are stored in memory and change with each project).
 
 ---
 
-## 檢查清單：Agent 系統上線前
+## Checklist: Before Launching the Agent System
 
-- [ ] Orchestrator 的 disallowed_tools 包含 Write, Edit, NotebookEdit
-- [ ] game-dev 的 prompt 包含 SKILL.md 路徑（要求先讀）
-- [ ] blender-dev 的 prompt 包含面數預算和預覽要求
-- [ ] 記憶系統使用 replace 模式（不是 append）
-- [ ] 覺醒報告工具已配置（summary, tasks_completed, questions）
-- [ ] Supervisor 有空轉保護（pending_review / no_reports → skip）
-- [ ] Agent 間通訊邊界已在 prompt 中定義
-- [ ] Build 指令已寫入 game-dev prompt（scene-compiler validate + vite build）
-- [ ] Phase 規劃包含「環境豐富化」和「氛圍系統」phase
-- [ ] Turn 預算按階段分配（評估 5 + 選擇 3 + 執行 40 + 收尾 10）
-- [ ] Prompt 包含「自主執行，不需問人類」+ 覺醒報告記錄決策理由
-- [ ] Build 失敗有限重試（最多 2 次，修不好記錄到下次）
-- [ ] 參考文件按 Phase 標註何時讀（不要一次全讀）
-- [ ] 經驗豐富的 agent 使用分層記憶（索引 + 詳細檔案，上限 20 條）
+- [ ] Orchestrator's disallowed_tools includes Write, Edit, NotebookEdit
+- [ ] game-dev's prompt includes the SKILL.md path (require reading it first)
+- [ ] blender-dev's prompt includes polygon budget and preview requirements
+- [ ] Memory system uses replace mode (not append)
+- [ ] Awakening report tool is configured (summary, tasks_completed, questions)
+- [ ] Supervisor has idle protection (pending_review / no_reports → skip)
+- [ ] Inter-agent communication boundaries are defined in the prompt
+- [ ] Build instructions are written into the game-dev prompt (scene-compiler validate + vite build)
+- [ ] Phase plan includes "environment enrichment" and "atmosphere system" phases
+- [ ] Turn budget is allocated by phase (assessment 5 + selection 3 + execution 40 + wrap-up 10)
+- [ ] Prompt includes "execute autonomously, don't ask the human" + awakening report records decision reasoning
+- [ ] Build failure has limited retries (maximum 2 times; if unfixable, record for next time)
+- [ ] Reference files are annotated by phase for when to read (don't read all at once)
+- [ ] Experienced agents use layered memory (index + detailed files, limit 20 entries)
