@@ -1,6 +1,9 @@
 import { resolve, basename, isAbsolute } from "node:path";
 import { mkdirSync, writeFileSync, existsSync } from "node:fs";
 import { execFileSync } from "node:child_process";
+import select from "@inquirer/select";
+import { templates, DEFAULT_TEMPLATE } from "../templates/index.js";
+import type { GameTemplate } from "../templates/index.js";
 
 const GREEN = "\x1b[32m";
 const RED = "\x1b[31m";
@@ -81,21 +84,20 @@ export default defineConfig({
 `;
 }
 
-function gameBudget(): string {
-  return JSON.stringify(
-    {
-      maxNPCs: 30,
-      maxShadowCasters: 10,
-      maxGLBSizeMB: 5,
-      maxTotalAssetTypes: 50,
-      maxRenderDistance: 300,
-      targetFPS: 30,
-      maxDrawCalls: 200,
-      maxActiveMeshes: 500,
-    },
-    null,
-    2,
-  );
+const DEFAULT_BUDGET = {
+  maxNPCs: 30,
+  maxShadowCasters: 10,
+  maxGLBSizeMB: 5,
+  maxTotalAssetTypes: 50,
+  maxRenderDistance: 300,
+  targetFPS: 30,
+  maxDrawCalls: 200,
+  maxActiveMeshes: 500,
+};
+
+function gameBudget(template: GameTemplate): string {
+  const budget = { ...DEFAULT_BUDGET, ...template.budgetOverrides };
+  return JSON.stringify(budget, null, 2);
 }
 
 function indexHtml(title: string): string {
@@ -115,32 +117,32 @@ function indexHtml(title: string): string {
 `;
 }
 
-function indexTs(): string {
-  return `import "@babylonjs/loaders/glTF";
-import { Engine, Scene, FreeCamera, HemisphericLight, MeshBuilder, Vector3, Color4 } from "@babylonjs/core";
-
-const canvas = document.getElementById("game-canvas") as HTMLCanvasElement;
-const engine = new Engine(canvas, true);
-const scene = new Scene(engine);
-
-scene.clearColor = new Color4(0.53, 0.81, 0.92, 1);
-
-const camera = new FreeCamera("camera", new Vector3(0, 5, -10), scene);
-camera.setTarget(Vector3.Zero());
-camera.attachControl(canvas, true);
-
-new HemisphericLight("light", new Vector3(0, 1, 0), scene);
-
-const ground = MeshBuilder.CreateGround("ground", { width: 20, height: 20 }, scene);
-const box = MeshBuilder.CreateBox("box", { size: 1 }, scene);
-box.position.y = 0.5;
-
-engine.runRenderLoop(() => scene.render());
-window.addEventListener("resize", () => engine.resize());
-`;
+export function listTemplates(): number {
+  console.log(`\n${BOLD}Available templates:${RESET}\n`);
+  for (const t of Object.values(templates)) {
+    const tag = t.name === DEFAULT_TEMPLATE ? ` ${DIM}(default)${RESET}` : "";
+    console.log(`  ${GREEN}${t.name}${RESET}${tag}`);
+    console.log(`  ${DIM}${t.description}${RESET}\n`);
+  }
+  return 0;
 }
 
-export function runCreate(name: string): number {
+async function pickTemplate(): Promise<GameTemplate> {
+  const answer = await select({
+    message: "Select a game template:",
+    choices: Object.values(templates).map((t) => ({
+      name: `${t.name}  ${DIM}— ${t.description}${RESET}`,
+      value: t.name,
+    })),
+    default: DEFAULT_TEMPLATE,
+  });
+  return templates[answer];
+}
+
+export async function runCreate(
+  name: string,
+  templateName?: string,
+): Promise<number> {
   const targetDir = isAbsolute(name) ? name : resolve(process.cwd(), name);
   const projectName = basename(targetDir);
 
@@ -149,8 +151,22 @@ export function runCreate(name: string): number {
     return 1;
   }
 
+  // Resolve template
+  let template: GameTemplate;
+  if (templateName) {
+    if (!(templateName in templates)) {
+      console.error(
+        `${RED}Error: Unknown template "${templateName}". Use --template list to see available templates.${RESET}`,
+      );
+      return 1;
+    }
+    template = templates[templateName];
+  } else {
+    template = await pickTemplate();
+  }
+
   console.log(
-    `${BOLD}Creating Babylon.js project: ${projectName}${RESET}`,
+    `\n${BOLD}Creating Babylon.js project: ${projectName}${RESET} ${DIM}(template: ${template.name})${RESET}`,
   );
   console.log(`${DIM}${targetDir}${RESET}\n`);
 
@@ -165,9 +181,9 @@ export function runCreate(name: string): number {
     ["package.json", packageJson(projectName)],
     ["tsconfig.json", tsconfigJson()],
     ["vite.config.ts", viteConfig()],
-    ["game.budget.json", gameBudget()],
+    ["game.budget.json", gameBudget(template)],
     ["index.html", indexHtml(projectName)],
-    ["src/index.ts", indexTs()],
+    ["src/index.ts", template.indexTs()],
   ];
 
   for (const [relPath, content] of files) {
@@ -192,7 +208,7 @@ export function runCreate(name: string): number {
   }
 
   console.log(`
-${GREEN}Done!${RESET} Created ${BOLD}${projectName}${RESET} at ${targetDir}
+${GREEN}Done!${RESET} Created ${BOLD}${projectName}${RESET} ${DIM}(${template.name})${RESET} at ${targetDir}
 
   cd ${projectName}
   pnpm dev          ${DIM}# start dev server${RESET}
