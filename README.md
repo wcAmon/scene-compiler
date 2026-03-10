@@ -2,6 +2,73 @@
 
 Buildtime constraints + runtime auto-degrade for Babylon.js game scenes.
 
+## Agent Skill Files
+
+Connect scene-compiler to your AI agent and it gets access to battle-tested game development knowledge:
+
+| File | Audience | Content |
+|------|----------|---------|
+| `SKILL.md` | Agent (game-dev) | Babylon.js coding rules, validation patterns, known gotchas |
+| `SKILL-ASSET-PIPELINE.md` | Agent (orchestrator + blender-dev) | 3D asset lifecycle: proposal → Blender → QA → integration |
+| `SKILL-SCENE-DESIGN.md` | Agent (orchestrator + game-dev) | Scene polish patterns: lighting, fog, glow, environmental detail |
+| `SKILL-AGENT-SETUP.md` | Human | How to design agent systems for game development |
+
+## Agent Architecture for Game Development
+
+Scene-compiler isn't just a build tool — it's designed to be the foundation of an **AI agent game development pipeline**. The skill files and examples encode battle-tested patterns from hundreds of autonomous agent awakenings that produced playable browser games.
+
+### Three-Agent Pattern
+
+The recommended setup uses three specialized agents:
+
+```
+┌─────────────────────────────────────────────────────┐
+│  Game Director (orchestrator)                       │
+│  Reads memory → picks ONE task → delegates →        │
+│  reviews → reports                                  │
+│  Tools: Read, Bash, Glob, Grep (NO Write/Edit)     │
+│                                                     │
+│  Sub-agents:                                        │
+│    ├── game-dev    (Babylon.js/TypeScript)           │
+│    ├── blender-dev (headless 3D modeling)            │
+│    └── fullstack-dev (backend/infra, optional)      │
+├─────────────────────────────────────────────────────┤
+│  Dev Reporter (content writer)                      │
+│  Reads awakening reports → writes blog posts        │
+│  Translates "what happened" into "why it matters"   │
+│  Helps humans think about what's meaningful         │
+├─────────────────────────────────────────────────────┤
+│  Supervisor (scheduler)                             │
+│  systemd timer / cron → awakens agents on schedule  │
+│  Idle protection: skips if nothing to do            │
+└─────────────────────────────────────────────────────┘
+```
+
+### Prompt-guided vs Memory-guided
+
+The director agent can be configured in two modes depending on project scale:
+
+| Mode | North Star lives in | Best for | Trade-off |
+|------|-------------------|----------|-----------|
+| **Prompt-guided** | System prompt (immutable) | Large, long-term projects (5+ phases) | Stable direction, but hard to pivot |
+| **Memory-guided** | Agent memory (mutable) | Small, exploratory projects | Flexible, but direction may drift |
+
+**Key insight:** Prompt-guided agents accumulate results across phases because the technical constraints (camera architecture, asset pipeline, QA process) never change. Memory-guided agents are more flexible but may lose consistency over long development cycles.
+
+See `SKILL-AGENT-SETUP.md` for the full analysis.
+
+### Example Configurations
+
+Complete prompt templates and supervisor patterns:
+
+| Example | File | Description |
+|---------|------|-------------|
+| Game Director | [`examples/agents/game-director.md`](examples/agents/game-director.md) | Prompt-guided orchestrator for large projects |
+| Game Factory | [`examples/agents/game-factory.md`](examples/agents/game-factory.md) | Memory-guided orchestrator for flexible/small projects |
+| Dev Reporter | [`examples/agents/dev-reporter.md`](examples/agents/dev-reporter.md) | Blog writer that translates reports into narratives |
+
+---
+
 ## The Problem
 
 AI agents write Babylon.js code that compiles and type-checks perfectly — but explodes at runtime:
@@ -252,8 +319,16 @@ scene-compiler/
 │   ├── rewriter/      # Vite plugin (auto-freeze, dispose-guard)
 │   ├── runtime/       # PerformanceMonitor, AdaptiveQuality, RuntimeBudget
 │   └── capture/       # ScreenshotService, QAReporter, CaptureAPI
-├── game.budget.json   # Default budget config
-└── SKILL.md           # Agent reference (LLM-optimized)
+├── examples/
+│   └── agents/        # Agent prompt templates and supervisor patterns
+│       ├── game-director.md   # Prompt-guided orchestrator
+│       ├── game-factory.md    # Memory-guided orchestrator
+│       └── dev-reporter.md    # Blog writer agent
+├── game.budget.json           # Default budget config
+├── SKILL.md                   # Babylon.js coding reference (for game-dev agent)
+├── SKILL-ASSET-PIPELINE.md    # 3D asset lifecycle (for orchestrator + blender-dev)
+├── SKILL-SCENE-DESIGN.md      # Scene polish patterns (for orchestrator + game-dev)
+└── SKILL-AGENT-SETUP.md       # Agent architecture guide (for humans)
 ```
 
 ## Running Tests
