@@ -19,34 +19,48 @@ const SCENE_COMPILER_ROOT = resolve(
   "..",
 );
 
-function packageJson(name: string): string {
-  return JSON.stringify(
-    {
-      name,
-      version: "0.1.0",
-      private: true,
-      type: "module",
-      scripts: {
-        dev: "vite dev",
-        prebuild: `node --import tsx ${SCENE_COMPILER_ROOT}/packages/cli/src/index.ts validate src/ --public public/`,
-        build: "vite build",
-      },
-      dependencies: {
-        "@babylonjs/core": "^7.40.0",
-        "@babylonjs/loaders": "^7.40.0",
-      },
-      devDependencies: {
-        typescript: "^5.7.0",
-        vite: "^6.0.0",
-        tsx: "^4.21.0",
-      },
-      pnpm: {
-        onlyBuiltDependencies: ["esbuild"],
-      },
+function packageJson(name: string, isMultiplayer = false): string {
+  const pkg: Record<string, unknown> = {
+    name,
+    version: "0.1.0",
+    private: true,
+    type: "module",
+    scripts: isMultiplayer
+      ? {
+          dev: "concurrently \"vite dev\" \"tsx watch server/index.ts\"",
+          "dev:client": "vite dev",
+          "dev:server": "tsx watch server/index.ts",
+          prebuild: `node --import tsx ${SCENE_COMPILER_ROOT}/packages/cli/src/index.ts validate src/ --public public/`,
+          build: "vite build",
+          start: "node --import tsx server/index.ts",
+        }
+      : {
+          dev: "vite dev",
+          prebuild: `node --import tsx ${SCENE_COMPILER_ROOT}/packages/cli/src/index.ts validate src/ --public public/`,
+          build: "vite build",
+        },
+    dependencies: {
+      "@babylonjs/core": "^7.40.0",
+      "@babylonjs/loaders": "^7.40.0",
+      ...(isMultiplayer
+        ? {
+            express: "^5.1.0",
+            "socket.io": "^4.8.0",
+            "socket.io-client": "^4.8.0",
+          }
+        : {}),
     },
-    null,
-    2,
-  );
+    devDependencies: {
+      typescript: "^5.7.0",
+      vite: "^6.0.0",
+      tsx: "^4.21.0",
+      ...(isMultiplayer ? { concurrently: "^9.1.0" } : {}),
+    },
+    pnpm: {
+      onlyBuiltDependencies: ["esbuild"],
+    },
+  };
+  return JSON.stringify(pkg, null, 2);
 }
 
 function tsconfigJson(): string {
@@ -72,7 +86,23 @@ function tsconfigJson(): string {
   );
 }
 
-function viteConfig(): string {
+function viteConfig(isMultiplayer = false): string {
+  if (isMultiplayer) {
+    return `import { defineConfig } from "vite";
+import { sceneRewriter } from "${SCENE_COMPILER_ROOT}/packages/rewriter/src/plugin.js";
+
+export default defineConfig({
+  plugins: [sceneRewriter()],
+  build: { outDir: "dist", target: "es2022" },
+  server: {
+    port: 3001,
+    proxy: {
+      "/socket.io": { target: "http://localhost:3000", ws: true },
+    },
+  },
+});
+`;
+  }
   return `import { defineConfig } from "vite";
 import { sceneRewriter } from "${SCENE_COMPILER_ROOT}/packages/rewriter/src/plugin.js";
 
@@ -170,21 +200,29 @@ export async function runCreate(
   );
   console.log(`${DIM}${targetDir}${RESET}\n`);
 
+  const isMultiplayer = !!template.serverTs;
+
   // Create directory structure
   mkdirSync(resolve(targetDir, "src"), { recursive: true });
   mkdirSync(resolve(targetDir, "public", "assets", "models"), {
     recursive: true,
   });
+  if (isMultiplayer) {
+    mkdirSync(resolve(targetDir, "server"), { recursive: true });
+  }
 
   // Write files
   const files: [string, string][] = [
-    ["package.json", packageJson(projectName)],
+    ["package.json", packageJson(projectName, isMultiplayer)],
     ["tsconfig.json", tsconfigJson()],
-    ["vite.config.ts", viteConfig()],
+    ["vite.config.ts", viteConfig(isMultiplayer)],
     ["game.budget.json", gameBudget(template)],
     ["index.html", indexHtml(projectName)],
     ["src/index.ts", template.indexTs()],
   ];
+  if (isMultiplayer && template.serverTs) {
+    files.push(["server/index.ts", template.serverTs()]);
+  }
 
   for (const [relPath, content] of files) {
     const fullPath = resolve(targetDir, relPath);
@@ -207,13 +245,26 @@ export async function runCreate(
     return 1;
   }
 
-  console.log(`
+  if (isMultiplayer) {
+    console.log(`
+${GREEN}Done!${RESET} Created ${BOLD}${projectName}${RESET} ${DIM}(${template.name})${RESET} at ${targetDir}
+
+  cd ${projectName}
+  pnpm dev          ${DIM}# start client + server (concurrent)${RESET}
+  pnpm dev:client   ${DIM}# client only (Vite on :3001)${RESET}
+  pnpm dev:server   ${DIM}# server only (Express+Socket.IO on :3000)${RESET}
+  pnpm build        ${DIM}# validate + build client${RESET}
+  pnpm start        ${DIM}# production server (serves dist/ + WebSocket)${RESET}
+`);
+  } else {
+    console.log(`
 ${GREEN}Done!${RESET} Created ${BOLD}${projectName}${RESET} ${DIM}(${template.name})${RESET} at ${targetDir}
 
   cd ${projectName}
   pnpm dev          ${DIM}# start dev server${RESET}
   pnpm build        ${DIM}# validate + build${RESET}
 `);
+  }
 
   return 0;
 }

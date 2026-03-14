@@ -752,6 +752,119 @@ for (const mesh of worldMeshes) {
 
 ---
 
+## Multiplayer Architecture (Express + Socket.IO)
+
+> For games using the `multiplayer` template. Server runs Express + Socket.IO,
+> client connects via `socket.io-client`. Vite dev server proxies WebSocket to the game server.
+
+### Project Structure
+
+```
+my-game/
+├── src/index.ts           ← Babylon.js client (connects to Socket.IO)
+├── server/index.ts        ← Express + Socket.IO server
+├── public/assets/models/  ← GLB 3D assets
+├── dist/                  ← Vite build output
+├── vite.config.ts         ← proxy /socket.io → localhost:3000
+└── package.json           ← includes express, socket.io, socket.io-client
+```
+
+### Development
+
+```bash
+pnpm dev           # Runs both client (:3001) and server (:3000) concurrently
+pnpm dev:client    # Client only (Vite HMR on :3001)
+pnpm dev:server    # Server only (Express+Socket.IO on :3000, tsx watch)
+```
+
+### Production
+
+```bash
+pnpm build         # Validate + Vite build → dist/
+pnpm start         # Express serves dist/ + Socket.IO on :3000
+```
+
+### Server Pattern — Authoritative State Broadcast
+
+The server owns the game state. Clients send inputs, server updates state, broadcasts at fixed rate.
+
+```typescript
+// server/index.ts — Core pattern
+const players = new Map<string, PlayerState>();
+
+io.on("connection", (socket) => {
+  players.set(socket.id, { x: 0, z: 0 });
+
+  socket.on("move", (data: { x: number; z: number }) => {
+    const state = players.get(socket.id);
+    if (state) { state.x = data.x; state.z = data.z; }
+  });
+
+  socket.on("disconnect", () => {
+    players.delete(socket.id);
+    io.emit("leave", socket.id);
+  });
+});
+
+// Broadcast at 20Hz (50ms) — use volatile to drop stale packets
+setInterval(() => {
+  if (players.size > 0) {
+    io.volatile.emit("state", Object.fromEntries(players));
+  }
+}, 50);
+```
+
+### Client Pattern — Interpolated Remote Players
+
+```typescript
+// Receive state updates, interpolate remote player positions
+socket.on("state", (players: Record<string, { x: number; z: number }>) => {
+  for (const [id, pos] of Object.entries(players)) {
+    if (id === myId) continue;
+    const mesh = getOrCreateRemote(id);
+    // Frame-rate independent interpolation (see Gotcha #11)
+    const dt = engine.getDeltaTime() / 1000;
+    const alpha = 1 - Math.pow(0.001, dt);
+    mesh.position.x += (pos.x - mesh.position.x) * alpha;
+    mesh.position.z += (pos.z - mesh.position.z) * alpha;
+  }
+});
+
+// Send position at ~20Hz using volatile (drops if congested)
+socket.volatile.emit("move", { x: player.position.x, z: player.position.z });
+```
+
+### Key Rules
+
+1. **Server is authoritative** — clients send inputs, server validates and broadcasts
+2. **Broadcast at fixed rate** (20Hz) — don't emit on every frame
+3. **Use `volatile.emit`** — drops stale packets instead of queueing
+4. **Interpolate remote players** — use frame-rate-independent lerp (Gotcha #11)
+5. **Clean up on disconnect** — remove meshes when `"leave"` event fires
+6. **Validate inputs server-side** — clamp positions, rate-limit actions
+
+### Vite Proxy Config
+
+During development, Vite dev server (:3001) proxies WebSocket traffic to the game server (:3000):
+
+```typescript
+// vite.config.ts
+server: {
+  port: 3001,
+  proxy: {
+    "/socket.io": { target: "http://localhost:3000", ws: true },
+  },
+},
+```
+
+### Create Multiplayer Project
+
+```bash
+node --import tsx /home/wake/scene-compiler/packages/cli/src/index.ts create my-game --template multiplayer
+```
+
+---
+
 ## Blender Headless 3D Asset Pipeline
 
 > For the blender-dev sub-agent. Read this section + `memory/references/blender-modeling.md` (advanced reference) before modeling.
@@ -845,7 +958,7 @@ for label, loc, rot in angles:
 
 **Run command:**
 ```bash
-blender --background --python script.py -- /home/wake/dusk-games/{slug}/public/assets/models/
+blender --background --python script.py -- /home/wake/games/{slug}/public/assets/models/
 ```
 
 ### Image-to-Blender Modeling Workflow — Image-to-Blender Pipeline
@@ -897,36 +1010,68 @@ color = hex_to_linear("#D70F64")
 bsdf.inputs["Base Color"].default_value = (*color, 1.0)
 ```
 
-#### Step 4: Texture materials (when more detail is needed)
+#### Step 4: Material decision — vertex color vs texture
 
-When solid colors are not enough, use Gemini to generate tileable textures:
+| Surface type | Method | When to use |
+|-------------|--------|-------------|
+| Metals, solid colors, small props (< 2K faces) | **Vertex Color** | Pure color is sufficient, zero extra files |
+| Building walls, roads, sidewalks, large repeating patterns | **Gemini Texture** | Needs visible pattern detail (brick, tile, concrete) |
+| Mixed model (building = wall + railing) | **Both** | Texture for walls, vertex color for metal trim |
+
+#### Step 4a: Vertex Color workflow (simple)
 
 ```python
-# Producer first generates a texture image using MCP tool
-# generate_reference_image("tileable brick wall texture, seamless, 512x512")
-# → saved to memory/references/brick_wall.png
+color_layer = bm.loops.layers.color.new("Col")
+for face in bm.faces:
+    for loop in face.loops:
+        loop[color_layer] = (0.85, 0.75, 0.65, 1.0)  # warm wall color
+```
 
-# Load texture in Blender script
-img = bpy.data.images.load("/path/to/brick_wall.png")
-tex_node = mat.node_tree.nodes.new('ShaderNodeTexImage')
-tex_node.image = img
+#### Step 4b: Gemini Texture workflow (detailed surfaces)
 
-# UV unwrap (use Smart UV Project for simple objects)
+```python
+# ── Step 1: Generate texture via MCP tool (before writing Blender script) ──
+# Call the generate_texture_image tool (NOT generate_reference_image):
+#   material_name="brick_wall"
+#   prompt="aged red brick wall with white mortar lines, Taiwanese style"
+#   size=512
+# → Returns absolute path: /home/wake/runner-game/public/assets/textures/brick_wall_tex_v1.png
+
+# ── Step 2: UV unwrap in Blender script ──
 bpy.context.view_layer.objects.active = obj
+obj.select_set(True)
 bpy.ops.object.mode_set(mode='EDIT')
 bpy.ops.mesh.select_all(action='SELECT')
 bpy.ops.uv.smart_project(angle_limit=66, island_margin=0.02)
 bpy.ops.object.mode_set(mode='OBJECT')
 
-# Connect texture → Base Color
-mat.node_tree.links.new(tex_node.outputs["Color"], bsdf.inputs["Base Color"])
+# ── Step 3: Create PBR material with texture ──
+mat = bpy.data.materials.new(name="BrickWall")
+mat.use_nodes = True
+nodes = mat.node_tree.nodes
+links = mat.node_tree.links
+bsdf = nodes["Principled BSDF"]
+
+tex_node = nodes.new("ShaderNodeTexImage")
+tex_node.image = bpy.data.images.load("/path/to/brick_wall_tex_v1.png")  # path from tool
+links.new(tex_node.outputs["Color"], bsdf.inputs["Base Color"])
+bsdf.inputs["Roughness"].default_value = 0.75  # 0.5-0.8 buildings, 0.9 roads
+obj.data.materials.append(mat)
+
+# ── Step 4: Export GLB ──
+# export_materials='EXPORT' packs textures into GLB binary automatically
+# No extra image files needed at runtime — Babylon.js loads them from the GLB
 ```
 
 **Texture resolution rules:**
 - Small props: 256x256
-- Medium objects: 512x512
-- Large buildings/ground: 1024x1024
-- Never exceed 1024x1024 (browser memory constraint)
+- Medium objects / stalls / vehicles: 512x512
+- Large buildings / ground: 512x512 ~ 1024x1024
+- **Never exceed 1024x1024** (browser memory constraint)
+
+**Important:** Use `generate_texture_image` tool (NOT `generate_reference_image`).
+Reference images are isometric design mockups for the producer to review.
+Textures are flat, seamless, tileable diffuse maps for Blender PBR materials.
 
 ### Common Blender Pitfalls
 

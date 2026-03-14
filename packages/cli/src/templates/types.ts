@@ -13,5 +13,7 @@ export interface GameTemplate {
   name: string;
   description: string;
   indexTs: () => string;
+  /** Server entry point for multiplayer templates */
+  serverTs?: () => string;
   budgetOverrides?: Partial<GameBudget>;
 }
